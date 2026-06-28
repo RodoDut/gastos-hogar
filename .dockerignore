@@ -1,0 +1,5 @@
+/vendor/
+/data/*.json
+.env
+.git
+/.htaccess

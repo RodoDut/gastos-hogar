@@ -1,0 +1,21 @@
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;background:linear-gradient(135deg,#312e81 0%,#4f46e5 50%,#7c3aed 100%);
+     display:flex;align-items:center;justify-content:center;
+     font-family:'Segoe UI',system-ui,-apple-system,sans-serif}
+.box{background:#fff;border-radius:28px;padding:52px 40px;max-width:380px;width:calc(100% - 2rem);
+     text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.3)}
+.ico{font-size:4rem;margin-bottom:1.25rem;display:block}
+h1{font-size:1.75rem;font-weight:800;color:#1e293b;margin-bottom:.5rem;letter-spacing:-.02em}
+.sub{color:#64748b;margin-bottom:2rem;font-size:.95rem;line-height:1.5}
+input[type=password]{width:100%;padding:15px;border:2px solid #e2e8f0;border-radius:14px;
+   font-size:1.1rem;outline:none;text-align:center;letter-spacing:6px;transition:.2s;color:#1e293b}
+input:focus{border-color:#4f46e5;box-shadow:0 0 0 4px rgba(79,70,229,.1)}
+button{margin-top:1rem;width:100%;padding:15px;
+       background:linear-gradient(135deg,#4f46e5,#7c3aed);
+       color:#fff;border:none;border-radius:14px;font-size:1rem;font-weight:700;
+       cursor:pointer;transition:.2s;letter-spacing:.02em}
+button:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(79,70,229,.4)}
+.msg-err{margin-top:1rem;color:#dc2626;font-size:.875rem;font-weight:600;
+         background:#fef2f2;border-radius:8px;padding:.6rem 1rem}
+.msg-lock{margin-top:1rem;color:#92400e;font-size:.875rem;font-weight:600;
+          background:#fffbeb;border-radius:8px;padding:.6rem 1rem}

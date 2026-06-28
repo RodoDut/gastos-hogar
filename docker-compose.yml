@@ -1,0 +1,8 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8080:80"
+    volumes:
+      - ./.env:/var/www/html/.env:ro   # secretos fuera de la imagen
+      - ./data:/var/www/html/data       # datos persisten entre reinicios
