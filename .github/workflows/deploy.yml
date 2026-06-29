@@ -32,7 +32,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          echo "StrictHostKeyChecking no" > ~/.ssh/config
 
           rsync -avz --delete \
             --exclude='.env' \
@@ -58,6 +58,5 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key \
               -p "$DEPLOY_PORT" \
-              -o StrictHostKeyChecking=no \
               "$DEPLOY_USER@$DEPLOY_HOST" \
               "mkdir -p $DEPLOY_PATH/data && chmod 700 $DEPLOY_PATH/data"
