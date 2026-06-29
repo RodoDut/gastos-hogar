@@ -21,19 +21,25 @@ jobs:
       - name: Install production dependencies
         run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.HOSTINGER_SSH_KEY }}
+
+      - name: Add server to known_hosts
+        env:
+          DEPLOY_HOST: ${{ secrets.HOSTINGER_HOST }}
+          DEPLOY_PORT: ${{ secrets.HOSTINGER_SSH_PORT }}
+        run: |
+          ssh-keyscan -H -p "$DEPLOY_PORT" "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
       - name: Deploy via rsync
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
           DEPLOY_HOST: ${{ secrets.HOSTINGER_HOST }}
           DEPLOY_PORT: ${{ secrets.HOSTINGER_SSH_PORT }}
           DEPLOY_USER: ${{ secrets.HOSTINGER_USER }}
           DEPLOY_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
         run: |
-          mkdir -p ~/.ssh
-          printf '%s' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H -p "$DEPLOY_PORT" "$DEPLOY_HOST" >> ~/.ssh/known_hosts
-
           rsync -avz --delete \
             --exclude='.env' \
             --exclude='data/' \
@@ -44,7 +50,7 @@ jobs:
             --exclude='docker-compose.yml' \
             --exclude='.dockerignore' \
             --exclude='gastos.php' \
-            -e "ssh -i ~/.ssh/deploy_key -p $DEPLOY_PORT -o StrictHostKeyChecking=yes" \
+            -e "ssh -p $DEPLOY_PORT -o StrictHostKeyChecking=yes" \
             ./ \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
 
@@ -56,8 +62,7 @@ jobs:
           DEPLOY_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
           APP_PASS: ${{ secrets.APP_PASS }}
         run: |
-          if ssh -i ~/.ssh/deploy_key \
-                 -p "$DEPLOY_PORT" \
+          if ssh -p "$DEPLOY_PORT" \
                  -o StrictHostKeyChecking=yes \
                  "$DEPLOY_USER@$DEPLOY_HOST" \
                  "[ -f \"$DEPLOY_PATH/.env\" ]"; then
@@ -65,8 +70,7 @@ jobs:
           else
             printf 'APP_PASS=%s\nDATA_FILE=data/gastos.json\nSESSION_TTL=3600\nMAX_ATTEMPTS=3\nLOCKOUT_SEC=60\n' \
               "$APP_PASS" > /tmp/app_env
-            scp -i ~/.ssh/deploy_key \
-                -P "$DEPLOY_PORT" \
+            scp -P "$DEPLOY_PORT" \
                 -o StrictHostKeyChecking=yes \
                 /tmp/app_env \
                 "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/.env"
@@ -81,8 +85,7 @@ jobs:
           DEPLOY_USER: ${{ secrets.HOSTINGER_USER }}
           DEPLOY_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
         run: |
-          ssh -i ~/.ssh/deploy_key \
-              -p "$DEPLOY_PORT" \
+          ssh -p "$DEPLOY_PORT" \
               -o StrictHostKeyChecking=yes \
               "$DEPLOY_USER@$DEPLOY_HOST" \
               "mkdir -p $DEPLOY_PATH/data && chmod 700 $DEPLOY_PATH/data"
