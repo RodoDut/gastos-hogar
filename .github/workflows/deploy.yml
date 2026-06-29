@@ -32,7 +32,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          echo "StrictHostKeyChecking no" > ~/.ssh/config
+          ssh-keyscan -H -p "$DEPLOY_PORT" "$DEPLOY_HOST" >> ~/.ssh/known_hosts
 
           rsync -avz --delete \
             --exclude='.env' \
@@ -44,13 +44,38 @@ jobs:
             --exclude='docker-compose.yml' \
             --exclude='.dockerignore' \
             --exclude='gastos.php' \
-            -e "ssh -i ~/.ssh/deploy_key -p $DEPLOY_PORT" \
+            -e "ssh -i ~/.ssh/deploy_key -p $DEPLOY_PORT -o StrictHostKeyChecking=yes" \
             ./ \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
 
+      - name: Create .env on server (first deploy only)
+        env:
+          DEPLOY_HOST: ${{ secrets.HOSTINGER_HOST }}
+          DEPLOY_PORT: ${{ secrets.HOSTINGER_SSH_PORT }}
+          DEPLOY_USER: ${{ secrets.HOSTINGER_USER }}
+          DEPLOY_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
+          APP_PASS: ${{ secrets.APP_PASS }}
+        run: |
+          if ssh -i ~/.ssh/deploy_key \
+                 -p "$DEPLOY_PORT" \
+                 -o StrictHostKeyChecking=yes \
+                 "$DEPLOY_USER@$DEPLOY_HOST" \
+                 "[ -f \"$DEPLOY_PATH/.env\" ]"; then
+            echo ".env ya existe en el servidor, se mantiene sin cambios."
+          else
+            printf 'APP_PASS=%s\nDATA_FILE=data/gastos.json\nSESSION_TTL=3600\nMAX_ATTEMPTS=3\nLOCKOUT_SEC=60\n' \
+              "$APP_PASS" > /tmp/app_env
+            scp -i ~/.ssh/deploy_key \
+                -P "$DEPLOY_PORT" \
+                -o StrictHostKeyChecking=yes \
+                /tmp/app_env \
+                "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/.env"
+            rm -f /tmp/app_env
+            echo ".env creado correctamente en el servidor."
+          fi
+
       - name: Post-deploy setup
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
           DEPLOY_HOST: ${{ secrets.HOSTINGER_HOST }}
           DEPLOY_PORT: ${{ secrets.HOSTINGER_SSH_PORT }}
           DEPLOY_USER: ${{ secrets.HOSTINGER_USER }}
@@ -58,5 +83,6 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key \
               -p "$DEPLOY_PORT" \
+              -o StrictHostKeyChecking=yes \
               "$DEPLOY_USER@$DEPLOY_HOST" \
               "mkdir -p $DEPLOY_PATH/data && chmod 700 $DEPLOY_PATH/data"
