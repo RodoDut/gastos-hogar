@@ -24,11 +24,15 @@ jobs:
       - name: Deploy via rsync
         env:
           SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.HOSTINGER_HOST }}
+          DEPLOY_PORT: ${{ secrets.HOSTINGER_SSH_PORT }}
+          DEPLOY_USER: ${{ secrets.HOSTINGER_USER }}
+          DEPLOY_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.HOSTINGER_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
 
           rsync -avz --delete \
             --exclude='.env' \
@@ -40,16 +44,20 @@ jobs:
             --exclude='docker-compose.yml' \
             --exclude='.dockerignore' \
             --exclude='gastos.php' \
-            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HOSTINGER_SSH_PORT }}" \
+            -e "ssh -i ~/.ssh/deploy_key -p $DEPLOY_PORT" \
             ./ \
-            ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }}:${{ secrets.HOSTINGER_REMOTE_PATH }}/
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
 
-      - name: Post-deploy: fix permissions
+      - name: Post-deploy setup
         env:
           SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.HOSTINGER_HOST }}
+          DEPLOY_PORT: ${{ secrets.HOSTINGER_SSH_PORT }}
+          DEPLOY_USER: ${{ secrets.HOSTINGER_USER }}
+          DEPLOY_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
         run: |
           ssh -i ~/.ssh/deploy_key \
-              -p ${{ secrets.HOSTINGER_SSH_PORT }} \
+              -p "$DEPLOY_PORT" \
               -o StrictHostKeyChecking=no \
-              ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} \
-              "mkdir -p ${{ secrets.HOSTINGER_REMOTE_PATH }}/data && chmod 700 ${{ secrets.HOSTINGER_REMOTE_PATH }}/data"
+              "$DEPLOY_USER@$DEPLOY_HOST" \
+              "mkdir -p $DEPLOY_PATH/data && chmod 700 $DEPLOY_PATH/data"
