@@ -91,6 +91,7 @@ foreach ($rows as $i => $row) {
 
     if ($defaultOwnerId !== null) {
         $rows[$i]['owner_id'] = $defaultOwnerId;
+        $rows[$i]['who']      = $defaultOwnerId;
         $changed = true;
         echo "Gasto \"{$desc}\" — \${$amt} — {$date} → asignado automáticamente a {$defaultOwnerId} (modo 'all')\n";
         continue;
@@ -121,6 +122,7 @@ foreach ($rows as $i => $row) {
     }
 
     $rows[$i]['owner_id'] = $ownerId;
+    $rows[$i]['who']      = $ownerId;
     $changed = true;
     echo "  ✓ asignado a {$ownerId}\n\n";
 }
