@@ -4,5 +4,8 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - ./.env:/var/www/html/.env:ro   # secretos fuera de la imagen
-      - ./data:/var/www/html/data       # datos persisten entre reinicios
+      - ./.env:/var/www/html/.env:ro         # secretos fuera de la imagen
+      - ./data:/var/www/html/data             # datos persisten entre reinicios
+      - ./src:/var/www/html/src               # hot reload PHP
+      - ./public:/var/www/html/public         # hot reload assets y CSS
+      - ./templates:/var/www/html/templates   # hot reload templates
