@@ -11,6 +11,8 @@ interface ExpenseRepositoryInterface
     /** @return Expense[] */
     public function findByMonth(string $month): array;
 
+    public function findById(string $id): ?Expense;
+
     public function add(Expense $expense): void;
 
     public function delete(string $id): void;
