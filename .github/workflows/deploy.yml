@@ -89,29 +89,9 @@ jobs:
         run: |
           ssh -p "$DEPLOY_PORT" \
               -o StrictHostKeyChecking=yes \
-              "$DEPLOY_USER@$DEPLOY_HOST" <<'ENDSSH'
-
-            # Datos: permisos correctos
-            mkdir -p "$DEPLOY_PATH/data"
-            chmod 700 "$DEPLOY_PATH/data"
-
-            # tokens.json: crear si no existe (feature remember-me)
-            if [ ! -f "$DEPLOY_PATH/data/tokens.json" ]; then
-              echo '[]' > "$DEPLOY_PATH/data/tokens.json"
-              chmod 600 "$DEPLOY_PATH/data/tokens.json"
-            fi
-
-            # public_html: proxy + symlink (document root de Hostinger)
-            mkdir -p "$DEPLOY_PATH/public_html"
-
-            # Proxy index.php (idempotente)
-            if [ ! -f "$DEPLOY_PATH/public_html/index.php" ]; then
-              echo '<?php require __DIR__ . "/../public/index.php";' \
-                > "$DEPLOY_PATH/public_html/index.php"
-            fi
-
-            # Symlink assets (ln -sfn es idempotente)
-            ln -sfn "$DEPLOY_PATH/public/assets" \
-                    "$DEPLOY_PATH/public_html/assets"
-
-ENDSSH
+              "$DEPLOY_USER@$DEPLOY_HOST" \
+              "mkdir -p $DEPLOY_PATH/data && chmod 700 $DEPLOY_PATH/data && \
+               mkdir -p $DEPLOY_PATH/public_html && \
+               [ -f $DEPLOY_PATH/public_html/index.php ] || echo '<?php require __DIR__ . \"/../public/index.php\";' > $DEPLOY_PATH/public_html/index.php && \
+               ln -sfn $DEPLOY_PATH/public/assets $DEPLOY_PATH/public_html/assets && \
+               [ -f $DEPLOY_PATH/data/tokens.json ] || (echo '[]' > $DEPLOY_PATH/data/tokens.json && chmod 600 $DEPLOY_PATH/data/tokens.json)"
