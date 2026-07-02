@@ -4,14 +4,44 @@ declare(strict_types=1);
 namespace GastosHogar\Auth;
 
 use GastosHogar\Config;
+use GastosHogar\User\User;
+use GastosHogar\User\UserRepositoryInterface;
 
 class Auth
 {
-    public function __construct(private readonly Config $config) {}
+    private ?User $cachedActor   = null;
+    private bool  $actorResolved = false;
+
+    public function __construct(
+        private readonly Config $config,
+        private readonly UserRepositoryInterface $users,
+    ) {}
 
     public function isLoggedIn(): bool
     {
-        return isset($_SESSION['ok']);
+        return $this->actor() !== null;
+    }
+
+    /** Usuario autenticado actual, re-resuelto desde people.json (nunca confiar solo en la sesión). */
+    public function actor(): ?User
+    {
+        if ($this->actorResolved) {
+            return $this->cachedActor;
+        }
+        $this->actorResolved = true;
+
+        $userId = $_SESSION['user_id'] ?? null;
+        if (!is_string($userId)) {
+            return $this->cachedActor = null;
+        }
+
+        $user = $this->users->findById($userId);
+        if ($user === null || !$user->active) {
+            session_destroy();
+            return $this->cachedActor = null;
+        }
+
+        return $this->cachedActor = $user;
     }
 
     public function checkSessionTimeout(): bool
@@ -29,7 +59,7 @@ class Auth
         return true;
     }
 
-    public function login(string $password): bool
+    public function login(string $username, string $password): bool
     {
         $attempts = (int) ($_SESSION['login_attempts'] ?? 0);
         $lastTry  = (int) ($_SESSION['last_attempt']   ?? 0);
@@ -43,12 +73,16 @@ class Auth
             $_SESSION['login_attempts'] = 0;
         }
 
-        if ($this->verifyPassword($password)) {
+        $user = $this->users->findByUsername($username);
+
+        if ($user !== null && $user->active && password_verify($password, $user->passwordHash)) {
             $_SESSION['login_attempts'] = 0;
             session_regenerate_id(true);
-            $_SESSION['ok']          = 1;
+            $_SESSION['user_id']     = $user->id;
             $_SESSION['last_active'] = time();
             $_SESSION['csrf']        = bin2hex(random_bytes(32));
+            $this->actorResolved     = false;
+            $this->cachedActor       = null;
             return true;
         }
 
@@ -88,12 +122,5 @@ class Auth
     {
         $token = htmlspecialchars($_SESSION['csrf'] ?? '', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         return '<input type="hidden" name="csrf" value="' . $token . '">';
-    }
-
-    private function verifyPassword(string $input): bool
-    {
-        return str_starts_with($this->config->appPass, '$2y$')
-            ? password_verify($input, $this->config->appPass)
-            : hash_equals($this->config->appPass, $input);
     }
 }

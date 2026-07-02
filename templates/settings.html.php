@@ -1,5 +1,6 @@
 <?php
 /** @var GastosHogar\Auth\Auth $auth */
+/** @var GastosHogar\User\User $actor */
 /** @var GastosHogar\Config $config */
 /** @var GastosHogar\Person\Person[] $people */
 /** @var string|null $settingsError */
@@ -19,6 +20,9 @@
   <h1>🏠 Gastos del Hogar</h1>
   <div style="display:flex;gap:.75rem;align-items:center">
     <a href="/" class="logout-btn" style="text-decoration:none">← Volver</a>
+    <?php if ($actor->isAdmin()): ?>
+    <a href="?page=admin_users" class="logout-btn" style="text-decoration:none" title="Usuarios">👤 Usuarios</a>
+    <?php endif ?>
     <form method="post">
       <?= $auth->csrfField() ?>
       <button type="submit" name="logout" value="1" class="logout-btn">Salir</button>

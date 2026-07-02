@@ -9,11 +9,16 @@ require_once $root . '/vendor/autoload.php';
 
 use Dotenv\Dotenv;
 use GastosHogar\Config;
+use GastosHogar\Admin\UserController;
 use GastosHogar\Auth\Auth;
+use GastosHogar\Auth\AuthorizationService;
+use GastosHogar\Auth\UnauthorizedActionException;
 use GastosHogar\Expense\Expense;
 use GastosHogar\Expense\JsonExpenseRepository;
 use GastosHogar\Person\Person;
 use GastosHogar\Person\JsonPersonRepository;
+use GastosHogar\User\JsonUserRepository;
+use GastosHogar\User\UserService;
 use GastosHogar\View\View;
 
 // ── Bootstrap ────────────────────────────────────────────────────
@@ -21,11 +26,15 @@ $dotenv = Dotenv::createImmutable($root);
 $dotenv->load();
 $dotenv->required(['APP_PASS', 'DATA_FILE', 'SESSION_TTL', 'MAX_ATTEMPTS', 'LOCKOUT_SEC']);
 
-$config     = new Config();
-$expRepo    = new JsonExpenseRepository($root . '/' . $config->dataFile);
-$personRepo = new JsonPersonRepository($root . '/data/people.json');
-$auth       = new Auth($config);
-$view       = new View($root . '/templates');
+$config         = new Config();
+$expRepo        = new JsonExpenseRepository($root . '/' . $config->dataFile);
+$personRepo     = new JsonPersonRepository($root . '/data/people.json');
+$userRepo       = new JsonUserRepository($root . '/data/people.json');
+$authz          = new AuthorizationService();
+$userService    = new UserService($userRepo);
+$userController = new UserController($userRepo, $userService, $authz);
+$auth           = new Auth($config, $userRepo);
+$view           = new View($root . '/templates');
 
 // ── Session hardening ─────────────────────────────────────────────
 session_set_cookie_params([
@@ -68,7 +77,7 @@ if (!$auth->isLoggedIn()) {
     $authErr    = false;
 
     if (isset($_POST['pwd']) && $lockoutMsg === '') {
-        if ($auth->login($_POST['pwd'])) {
+        if ($auth->login((string) ($_POST['user'] ?? ''), (string) $_POST['pwd'])) {
             header('Location: ' . $_SERVER['PHP_SELF']);
             exit;
         }
@@ -79,6 +88,8 @@ if (!$auth->isLoggedIn()) {
     $view->render('login', compact('auth', 'authErr', 'lockoutMsg'));
     exit;
 }
+
+$actor = $auth->actor();
 
 // ── Helpers ───────────────────────────────────────────────────────
 function validMonth(string $m): string
@@ -139,7 +150,54 @@ if ($page === 'settings') {
     }
 
     $people = $personRepo->findAll();
-    $view->render('settings', compact('auth', 'config', 'people', 'settingsError', 'settingsSuccess'));
+    $view->render('settings', compact('auth', 'actor', 'config', 'people', 'settingsError', 'settingsSuccess'));
+    exit;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  ADMIN — USUARIOS
+// ════════════════════════════════════════════════════════════════
+if ($page === 'admin_users') {
+    if (!$authz->canManageUsers($actor)) {
+        http_response_code(403);
+        die('No tenés permisos para acceder a esta sección.');
+    }
+
+    $adminError   = $_SESSION['admin_error']   ?? null;
+    $adminSuccess = $_SESSION['admin_success'] ?? null;
+    unset($_SESSION['admin_error'], $_SESSION['admin_success']);
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $auth->validateCsrf();
+        $action = $_POST['action'] ?? '';
+
+        try {
+            if ($action === 'create_user') {
+                $userController->createUser(
+                    $actor,
+                    trim($_POST['name']     ?? ''),
+                    trim($_POST['username'] ?? ''),
+                    (string) ($_POST['password'] ?? ''),
+                    (string) ($_POST['role']     ?? 'member')
+                );
+                $_SESSION['admin_success'] = 'Usuario creado correctamente.';
+            } elseif ($action === 'deactivate_user' && !empty($_POST['uid'])) {
+                $userController->deactivateUser($actor, $_POST['uid']);
+                $_SESSION['admin_success'] = 'Usuario desactivado.';
+            } elseif ($action === 'reactivate_user' && !empty($_POST['uid'])) {
+                $userController->reactivateUser($actor, $_POST['uid']);
+                $_SESSION['admin_success'] = 'Usuario reactivado.';
+            }
+        } catch (InvalidArgumentException|UnauthorizedActionException $e) {
+            $_SESSION['admin_error'] = $e->getMessage();
+        }
+
+        header('Location: ?page=admin_users');
+        exit;
+    }
+
+    $users = $userController->listUsers($actor);
+    $view->render('admin_users', compact('auth', 'actor', 'users', 'adminError', 'adminSuccess'));
     exit;
 }
 
@@ -161,27 +219,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $auth->validateCsrf();
     $action = $_POST['action'] ?? '';
 
-    if ($action === 'add' && !empty(trim($_POST['desc'] ?? '')) && isset($_POST['amt'])) {
-        $validIds = array_keys($peopleById);
-        $who      = in_array($_POST['who'] ?? '', $validIds, true)
-            ? $_POST['who'] : ($validIds[0] ?? '');
+    try {
+        if ($action === 'add' && !empty(trim($_POST['desc'] ?? '')) && isset($_POST['amt'])) {
+            $validIds = array_keys($peopleById);
+            $who      = in_array($_POST['who'] ?? '', $validIds, true)
+                ? $_POST['who'] : ($validIds[0] ?? '');
 
-        $cat = in_array($_POST['cat'] ?? '', array_keys($config->categoryColors), true)
-            ? $_POST['cat'] : 'Otro';
+            $cat = in_array($_POST['cat'] ?? '', array_keys($config->categoryColors), true)
+                ? $_POST['cat'] : 'Otro';
 
-        if ($who !== '') {
-            $expRepo->add(new Expense(
-                id:   bin2hex(random_bytes(8)),
-                who:  $who,
-                desc: trim($_POST['desc']),
-                amt:  max(0.0, (float) str_replace(',', '.', $_POST['amt'])),
-                cat:  $cat,
-                date: validDate($_POST['date'] ?? date('Y-m-d')),
-            ));
+            if ($who !== '') {
+                $expRepo->add(new Expense(
+                    id:      bin2hex(random_bytes(8)),
+                    who:     $who,
+                    desc:    trim($_POST['desc']),
+                    amt:     max(0.0, (float) str_replace(',', '.', $_POST['amt'])),
+                    cat:     $cat,
+                    date:    validDate($_POST['date'] ?? date('Y-m-d')),
+                    ownerId: $actor->id,
+                ));
+            }
+
+        } elseif ($action === 'del' && !empty($_POST['eid'])) {
+            $expense = $expRepo->findById($_POST['eid']);
+            if ($expense !== null) {
+                if (!$authz->canDeleteExpense($actor, $expense)) {
+                    throw new UnauthorizedActionException('No podés eliminar un gasto que no cargaste vos.');
+                }
+                $expRepo->delete($expense->id);
+            }
         }
-
-    } elseif ($action === 'del' && !empty($_POST['eid'])) {
-        $expRepo->delete($_POST['eid']);
+    } catch (UnauthorizedActionException $e) {
+        http_response_code(403);
+        die(e($e->getMessage()));
     }
 
     header('Location: ' . $_SERVER['PHP_SELF'] . '?month=' . urlencode($curMonth));
@@ -223,7 +293,7 @@ $nextM  = date('Y-m', strtotime($curMonth . '-01 +1 month'));
 $isNow  = ($curMonth === date('Y-m'));
 
 $view->render('app', compact(
-    'config', 'auth', 'people', 'peopleById', 'peopleColors',
+    'config', 'auth', 'actor', 'people', 'peopleById', 'peopleColors',
     'exps', 'expsByPerson', 'totalsByPerson',
     'total', 'ideal', 'balances', 'pctsByPerson',
     'mLabel', 'prevM', 'nextM', 'isNow', 'curMonth'
