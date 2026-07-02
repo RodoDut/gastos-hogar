@@ -77,18 +77,24 @@ class Auth
 
         if ($user !== null && $user->active && password_verify($password, $user->passwordHash)) {
             $_SESSION['login_attempts'] = 0;
-            session_regenerate_id(true);
-            $_SESSION['user_id']     = $user->id;
-            $_SESSION['last_active'] = time();
-            $_SESSION['csrf']        = bin2hex(random_bytes(32));
-            $this->actorResolved     = false;
-            $this->cachedActor       = null;
+            $this->loginAs($user);
             return true;
         }
 
         $_SESSION['login_attempts'] = ((int) ($_SESSION['login_attempts'] ?? 0)) + 1;
         $_SESSION['last_attempt']   = time();
         return false;
+    }
+
+    /** Establece la sesión para un usuario ya autenticado (password o remember-me token). */
+    public function loginAs(User $user): void
+    {
+        session_regenerate_id(true);
+        $_SESSION['user_id']     = $user->id;
+        $_SESSION['last_active'] = time();
+        $_SESSION['csrf']        = bin2hex(random_bytes(32));
+        $this->actorResolved     = false;
+        $this->cachedActor       = null;
     }
 
     public function logout(): void
