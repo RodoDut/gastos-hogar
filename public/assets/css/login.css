@@ -12,6 +12,9 @@ input[type=text],input[type=password]{width:100%;padding:15px;border:2px solid #
 input[type=text]{text-align:left;letter-spacing:normal}
 input[type=password]{text-align:center;letter-spacing:6px}
 input:focus{border-color:#4f46e5;box-shadow:0 0 0 4px rgba(79,70,229,.1)}
+.remember{display:flex;align-items:center;gap:.5rem;font-size:.875rem;color:#64748b;
+          text-align:left;margin-bottom:.25rem;cursor:pointer;user-select:none}
+.remember input{width:auto;margin:0}
 button{margin-top:1rem;width:100%;padding:15px;
        background:linear-gradient(135deg,#4f46e5,#7c3aed);
        color:#fff;border:none;border-radius:14px;font-size:1rem;font-weight:700;

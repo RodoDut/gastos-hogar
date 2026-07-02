@@ -10,6 +10,7 @@ class Config
     public readonly int    $sessionTtl;
     public readonly int    $maxAttempts;
     public readonly int    $lockoutSec;
+    public readonly int    $rememberMeDays;
 
     /** @var string[] */
     public readonly array $categories;
@@ -27,6 +28,7 @@ class Config
         $this->sessionTtl  = (int)    $_ENV['SESSION_TTL'];
         $this->maxAttempts = (int)    $_ENV['MAX_ATTEMPTS'];
         $this->lockoutSec  = (int)    $_ENV['LOCKOUT_SEC'];
+        $this->rememberMeDays = (int) ($_ENV['REMEMBER_ME_DAYS'] ?? 15);
 
         $this->categories = [
             'Alimentos', 'Servicios', 'Transporte', 'Salud',
