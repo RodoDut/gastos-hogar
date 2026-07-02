@@ -12,6 +12,8 @@ use GastosHogar\Config;
 use GastosHogar\Admin\UserController;
 use GastosHogar\Auth\Auth;
 use GastosHogar\Auth\AuthorizationService;
+use GastosHogar\Auth\JsonRememberMeRepository;
+use GastosHogar\Auth\RememberMeService;
 use GastosHogar\Auth\UnauthorizedActionException;
 use GastosHogar\Expense\Expense;
 use GastosHogar\Expense\JsonExpenseRepository;
@@ -34,6 +36,8 @@ $authz          = new AuthorizationService();
 $userService    = new UserService($userRepo);
 $userController = new UserController($userRepo, $userService, $authz);
 $auth           = new Auth($config, $userRepo);
+$rememberRepo   = new JsonRememberMeRepository($root . '/data/tokens.json');
+$rememberMe     = new RememberMeService($config, $rememberRepo, $userRepo);
 $view           = new View($root . '/templates');
 
 // ── Session hardening ─────────────────────────────────────────────
@@ -66,9 +70,18 @@ if ($auth->isLoggedIn() && !$auth->checkSessionTimeout()) {
 // ── Logout ────────────────────────────────────────────────────────
 if (isset($_POST['logout'])) {
     $auth->validateCsrf();
+    $rememberMe->forget();
     $auth->logout();
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
+}
+
+// ── Remember-me: si no hay sesión activa, intentar restaurarla por cookie ──
+if (!$auth->isLoggedIn()) {
+    $rememberedUser = $rememberMe->attemptLogin();
+    if ($rememberedUser !== null) {
+        $auth->loginAs($rememberedUser);
+    }
 }
 
 // ── Login ─────────────────────────────────────────────────────────
@@ -78,6 +91,9 @@ if (!$auth->isLoggedIn()) {
 
     if (isset($_POST['pwd']) && $lockoutMsg === '') {
         if ($auth->login((string) ($_POST['user'] ?? ''), (string) $_POST['pwd'])) {
+            if (!empty($_POST['remember'])) {
+                $rememberMe->issueAndSetCookie($auth->actor());
+            }
             header('Location: ' . $_SERVER['PHP_SELF']);
             exit;
         }
