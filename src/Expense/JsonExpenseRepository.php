@@ -23,6 +23,16 @@ class JsonExpenseRepository implements ExpenseRepositoryInterface
         ));
     }
 
+    public function findById(string $id): ?Expense
+    {
+        foreach ($this->findAll() as $expense) {
+            if ($expense->id === $id) {
+                return $expense;
+            }
+        }
+        return null;
+    }
+
     public function add(Expense $expense): void
     {
         $data               = $this->readRaw();

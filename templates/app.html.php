@@ -1,6 +1,7 @@
 <?php
 /** @var GastosHogar\Config $config */
 /** @var GastosHogar\Auth\Auth $auth */
+/** @var GastosHogar\User\User $actor */
 /** @var GastosHogar\Person\Person[] $people */
 /** @var array<string,GastosHogar\Person\Person> $peopleById */
 /** @var array<string,string> $peopleColors */
@@ -31,6 +32,9 @@
   <h1>🏠 Gastos del Hogar</h1>
   <div style="display:flex;gap:.75rem;align-items:center">
     <a href="?page=settings" class="logout-btn" style="text-decoration:none" title="Configuración">⚙️ Config</a>
+    <?php if ($actor->isAdmin()): ?>
+    <a href="?page=admin_users" class="logout-btn" style="text-decoration:none" title="Usuarios">👤 Usuarios</a>
+    <?php endif ?>
     <form method="post">
       <?= $auth->csrfField() ?>
       <button type="submit" name="logout" value="1" class="logout-btn">Salir</button>
@@ -223,9 +227,15 @@
                   <?= e($exp->cat) ?>
                 </span>
                 <span class="exp-date"><?= date('d/m', strtotime($exp->date)) ?></span>
+                <?php if ($exp->ownerId !== $actor->id): ?>
+                <span class="badge" style="background:#eef2ff;color:#4f46e5;border:1px solid #c7d2fe">
+                  Cargado por <?= e($peopleById[$exp->ownerId]->name ?? '—') ?>
+                </span>
+                <?php endif ?>
               </div>
             </div>
             <span class="exp-amt"><?= money($exp->amt) ?></span>
+            <?php if ($exp->ownerId === $actor->id): ?>
             <form method="post">
               <?= $auth->csrfField() ?>
               <input type="hidden" name="action" value="del">
@@ -235,6 +245,7 @@
                       data-desc="<?= e($exp->desc) ?>"
                       onclick="return confirm('¿Eliminar «' + this.dataset.desc + '»?')">×</button>
             </form>
+            <?php endif ?>
           </div>
           <?php endforeach ?>
         <?php endif ?>
