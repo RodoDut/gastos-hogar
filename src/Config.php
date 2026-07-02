@@ -29,12 +29,12 @@ class Config
         $this->lockoutSec  = (int)    $_ENV['LOCKOUT_SEC'];
 
         $this->categories = [
-            'Alimentación', 'Servicios', 'Transporte', 'Salud',
+            'Alimentos', 'Servicios', 'Transporte', 'Salud',
             'Educación', 'Hogar', 'Limpieza', 'Entretenimiento', 'Ropa', 'Otro',
         ];
 
         $this->categoryColors = [
-            'Alimentación'    => '#16a34a',
+            'Alimentos'       => '#16a34a',
             'Servicios'       => '#2563eb',
             'Transporte'      => '#d97706',
             'Salud'           => '#dc2626',
