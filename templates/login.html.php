@@ -20,6 +20,9 @@
     <?= $auth->csrfField() ?>
     <input type="text" name="user" placeholder="Usuario" autofocus autocomplete="username">
     <input type="password" name="pwd" placeholder="••••••••" autocomplete="current-password">
+    <label class="remember">
+      <input type="checkbox" name="remember" value="1"> Recordarme
+    </label>
     <button type="submit">Entrar</button>
   </form>
   <?php if ($lockoutMsg !== ''): ?>
