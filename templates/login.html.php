@@ -30,6 +30,10 @@
   <?php elseif ($authErr): ?>
   <p class="msg-err">Usuario o contraseña incorrectos. Intentá de nuevo.</p>
   <?php endif ?>
+  <?php // DEBUG TEMPORAL remember-me movil - sacar despues de diagnosticar ?>
+  <p style="font-size:.7rem;color:#94a3b8;margin-top:1rem">
+    debug: cookie remember_me <?= isset($_COOKIE['remember_me']) ? 'presente, no autenticó' : 'ausente' ?>
+  </p>
 </div>
 </body>
 </html>
