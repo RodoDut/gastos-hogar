@@ -83,6 +83,8 @@ if (!$auth->isLoggedIn()) {
     $rememberedUser = $rememberMe->attemptLogin();
     if ($rememberedUser !== null) {
         $auth->loginAs($rememberedUser);
+        header('Location: ' . $_SERVER['PHP_SELF']);
+        exit;
     }
 }
 
