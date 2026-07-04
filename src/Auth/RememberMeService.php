@@ -17,6 +17,14 @@ class RememberMeService
 {
     private const COOKIE_NAME = 'remember_me';
 
+    /**
+     * Segundos que un selector recién rotado sigue aceptando su validator viejo.
+     * Tolera pestañas concurrentes (ej. Chrome restaurando varias a la vez) que
+     * todavía tienen la cookie previa a la rotación, sin ampliar de forma
+     * relevante la ventana de un token robado.
+     */
+    private const GRACE_SECONDS = 15;
+
     public function __construct(
         private readonly Config $config,
         private readonly RememberMeRepositoryInterface $tokens,
@@ -72,7 +80,18 @@ class RememberMeService
             return null;
         }
 
-        $this->tokens->deleteBySelector($selector);
+        // No se borra el token de inmediato: se achica su vigencia a una
+        // ventana de gracia corta, para que otro pedido concurrente que
+        // llegue con la misma cookie (todavía no rotada en su navegador)
+        // pueda seguir autenticando en vez de encontrarse el selector ya
+        // borrado y perder la sesión "recordarme".
+        $this->tokens->save(new RememberMeToken(
+            selector:      $token->selector,
+            validatorHash: $token->validatorHash,
+            userId:        $token->userId,
+            expiresAt:     time() + self::GRACE_SECONDS,
+        ));
+
         $this->issueAndSetCookie($user);
 
         return $user;
