@@ -16,4 +16,6 @@ interface ExpenseRepositoryInterface
     public function add(Expense $expense): void;
 
     public function delete(string $id): void;
+
+    public function updateTicket(string $expenseId, ?string $ticketFilename): void;
 }
