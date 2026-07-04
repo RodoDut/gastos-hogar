@@ -1,3 +1,5 @@
 /vendor/
 /data/*.json
+/data/tickets/
 .env
+.claude/
