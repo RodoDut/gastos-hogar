@@ -11,6 +11,7 @@ class Config
     public readonly int    $maxAttempts;
     public readonly int    $lockoutSec;
     public readonly int    $rememberMeDays;
+    public readonly int    $ticketMaxBytes;
 
     /** @var string[] */
     public readonly array $categories;
@@ -29,6 +30,7 @@ class Config
         $this->maxAttempts = (int)    $_ENV['MAX_ATTEMPTS'];
         $this->lockoutSec  = (int)    $_ENV['LOCKOUT_SEC'];
         $this->rememberMeDays = (int) ($_ENV['REMEMBER_ME_DAYS'] ?? 15);
+        $this->ticketMaxBytes = (int) ($_ENV['TICKET_MAX_BYTES'] ?? 4194304);
 
         $this->categories = [
             'Alimentos', 'Servicios', 'Transporte', 'Salud',

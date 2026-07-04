@@ -323,6 +323,39 @@ input:focus, select:focus {
 .del-btn:hover { color: #ef4444; background: #fef2f2; }
 .empty-state { padding: 2rem 1rem; text-align: center; color: #94a3b8; font-size: .875rem; font-style: italic; }
 
+/* ── Comprobantes ── */
+.ticket-link {
+  font-size: .67rem;
+  font-weight: 700;
+  color: #4f46e5;
+  text-decoration: none;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  padding: 2px 7px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+.ticket-link:hover { background: #e0e7ff; }
+.ticket-attach-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #cbd5e1;
+  font-size: 1.05rem;
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: 6px;
+  transition: .15s;
+  flex-shrink: 0;
+  margin: 0;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.ticket-attach-btn:hover { color: #4f46e5; background: #eef2ff; }
+
 /* ── Settings ── */
 .settings-card {
   background: #fff;

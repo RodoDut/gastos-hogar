@@ -16,7 +16,9 @@ use GastosHogar\Auth\JsonRememberMeRepository;
 use GastosHogar\Auth\RememberMeService;
 use GastosHogar\Auth\UnauthorizedActionException;
 use GastosHogar\Expense\Expense;
+use GastosHogar\Expense\InvalidTicketException;
 use GastosHogar\Expense\JsonExpenseRepository;
+use GastosHogar\Expense\TicketService;
 use GastosHogar\Person\Person;
 use GastosHogar\Person\JsonPersonRepository;
 use GastosHogar\User\JsonUserRepository;
@@ -38,6 +40,7 @@ $userController = new UserController($userRepo, $userService, $authz);
 $auth           = new Auth($config, $userRepo);
 $rememberRepo   = new JsonRememberMeRepository($root . '/data/tokens.json');
 $rememberMe     = new RememberMeService($config, $rememberRepo, $userRepo);
+$ticketService  = new TicketService($root . '/data/tickets', $config->ticketMaxBytes);
 $view           = new View($root . '/templates');
 
 // ── Session hardening ─────────────────────────────────────────────
@@ -222,8 +225,25 @@ if ($page === 'admin_users') {
 }
 
 // ════════════════════════════════════════════════════════════════
+//  COMPROBANTE DE UN GASTO
+// ════════════════════════════════════════════════════════════════
+if ($page === 'ticket') {
+    $expense = $expRepo->findById((string) ($_GET['eid'] ?? ''));
+    if ($expense === null || $expense->ticketFilename === null) {
+        http_response_code(404);
+        exit;
+    }
+
+    $ticketService->streamToClient($expense->ticketFilename);
+    exit;
+}
+
+// ════════════════════════════════════════════════════════════════
 //  MAIN APP
 // ════════════════════════════════════════════════════════════════
+$appError = $_SESSION['app_error'] ?? null;
+unset($_SESSION['app_error']);
+
 $people      = $personRepo->findAll();
 $peopleById  = [];
 $peopleColors = [];
@@ -249,14 +269,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? $_POST['cat'] : 'Otro';
 
             if ($who !== '') {
+                $expenseId      = bin2hex(random_bytes(8));
+                $ticketFilename = null;
+
+                if (!empty($_FILES['ticket']['name'] ?? '')) {
+                    $ticketFilename = $ticketService->store($expenseId, $_FILES['ticket']);
+                }
+
                 $expRepo->add(new Expense(
-                    id:      bin2hex(random_bytes(8)),
-                    who:     $who,
-                    desc:    trim($_POST['desc']),
-                    amt:     max(0.0, (float) str_replace(',', '.', $_POST['amt'])),
-                    cat:     $cat,
-                    date:    validDate($_POST['date'] ?? date('Y-m-d')),
-                    ownerId: $actor->id,
+                    id:             $expenseId,
+                    who:            $who,
+                    desc:           trim($_POST['desc']),
+                    amt:            max(0.0, (float) str_replace(',', '.', $_POST['amt'])),
+                    cat:            $cat,
+                    date:           validDate($_POST['date'] ?? date('Y-m-d')),
+                    ownerId:        $actor->id,
+                    ticketFilename: $ticketFilename,
                 ));
             }
 
@@ -266,12 +294,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$authz->canDeleteExpense($actor, $expense)) {
                     throw new UnauthorizedActionException('No podés eliminar un gasto que no cargaste vos.');
                 }
+                $ticketService->delete($expense->ticketFilename);
                 $expRepo->delete($expense->id);
+            }
+
+        } elseif ($action === 'attach_ticket' && !empty($_POST['eid'])) {
+            $expense = $expRepo->findById($_POST['eid']);
+            if ($expense !== null) {
+                if (!$authz->canEditExpense($actor, $expense)) {
+                    throw new UnauthorizedActionException('No podés modificar un gasto que no cargaste vos.');
+                }
+                $newFilename = $ticketService->store($expense->id, $_FILES['ticket'] ?? []);
+                $ticketService->delete($expense->ticketFilename);
+                $expRepo->updateTicket($expense->id, $newFilename);
+            }
+
+        } elseif ($action === 'remove_ticket' && !empty($_POST['eid'])) {
+            $expense = $expRepo->findById($_POST['eid']);
+            if ($expense !== null) {
+                if (!$authz->canEditExpense($actor, $expense)) {
+                    throw new UnauthorizedActionException('No podés modificar un gasto que no cargaste vos.');
+                }
+                $ticketService->delete($expense->ticketFilename);
+                $expRepo->updateTicket($expense->id, null);
             }
         }
     } catch (UnauthorizedActionException $e) {
         http_response_code(403);
         die(e($e->getMessage()));
+    } catch (InvalidTicketException $e) {
+        $_SESSION['app_error'] = $e->getMessage();
     }
 
     header('Location: ' . $_SERVER['PHP_SELF'] . '?month=' . urlencode($curMonth));
@@ -316,5 +368,5 @@ $view->render('app', compact(
     'config', 'auth', 'actor', 'people', 'peopleById', 'peopleColors',
     'exps', 'expsByPerson', 'totalsByPerson',
     'total', 'ideal', 'balances', 'pctsByPerson',
-    'mLabel', 'prevM', 'nextM', 'isNow', 'curMonth'
+    'mLabel', 'prevM', 'nextM', 'isNow', 'curMonth', 'appError'
 ));
