@@ -292,6 +292,10 @@
 
 </main>
 
+<div id="ticketOverlay" class="ticket-overlay" hidden>
+  <div class="spinner"></div>
+</div>
+
 <script src="<?= asset('assets/js/app.js') ?>"></script>
 
 </body>
