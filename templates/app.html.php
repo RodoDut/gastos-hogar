@@ -17,6 +17,7 @@
 /** @var string $nextM */
 /** @var bool $isNow */
 /** @var string $curMonth */
+/** @var string|null $appError */
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -43,6 +44,10 @@
 </header>
 
 <main>
+
+  <?php if ($appError !== null): ?>
+  <div class="settings-alert settings-alert--error" style="margin-bottom:1rem"><?= e($appError) ?></div>
+  <?php endif ?>
 
   <!-- Sin personas configuradas -->
   <?php if (empty($people)): ?>
@@ -145,7 +150,7 @@
   <!-- Formulario de carga -->
   <div class="add-form">
     <div class="add-form-title">➕ Registrar gasto</div>
-    <form method="post" id="addForm" autocomplete="off">
+    <form method="post" id="addForm" autocomplete="off" enctype="multipart/form-data">
       <?= $auth->csrfField() ?>
       <input type="hidden" name="action" value="add">
       <input type="hidden" name="month"  value="<?= e($curMonth) ?>">
@@ -196,6 +201,11 @@
         </div>
 
         <div class="span2">
+          <label>📎 Comprobante (opcional)</label>
+          <input type="file" name="ticket" accept="image/jpeg,image/png,application/pdf" capture="environment">
+        </div>
+
+        <div class="span2">
           <button type="submit" class="add-btn">Agregar gasto</button>
         </div>
 
@@ -232,10 +242,34 @@
                   Cargado por <?= e($peopleById[$exp->ownerId]->name ?? '—') ?>
                 </span>
                 <?php endif ?>
+                <?php if ($exp->ticketFilename !== null): ?>
+                <a href="?page=ticket&eid=<?= e($exp->id) ?>" target="_blank" rel="noopener" class="ticket-link" title="Ver comprobante">📎 Comprobante</a>
+                <?php endif ?>
               </div>
             </div>
             <span class="exp-amt"><?= money($exp->amt) ?></span>
             <?php if ($exp->ownerId === $actor->id): ?>
+            <form method="post" enctype="multipart/form-data" class="ticket-attach-form">
+              <?= $auth->csrfField() ?>
+              <input type="hidden" name="action" value="attach_ticket">
+              <input type="hidden" name="eid"    value="<?= e($exp->id) ?>">
+              <input type="hidden" name="month"  value="<?= e($curMonth) ?>">
+              <label class="ticket-attach-btn" title="<?= $exp->ticketFilename !== null ? 'Reemplazar comprobante' : 'Adjuntar comprobante' ?>">
+                📎
+                <input type="file" name="ticket" accept="image/jpeg,image/png,application/pdf" capture="environment" onchange="submitTicketForm(this)" hidden>
+              </label>
+            </form>
+            <?php if ($exp->ticketFilename !== null): ?>
+            <form method="post">
+              <?= $auth->csrfField() ?>
+              <input type="hidden" name="action" value="remove_ticket">
+              <input type="hidden" name="eid"    value="<?= e($exp->id) ?>">
+              <input type="hidden" name="month"  value="<?= e($curMonth) ?>">
+              <button type="submit" class="del-btn" title="Quitar comprobante"
+                      data-desc="<?= e($exp->desc) ?>"
+                      onclick="return confirm('¿Quitar el comprobante de «' + this.dataset.desc + '»?')">📎✕</button>
+            </form>
+            <?php endif ?>
             <form method="post">
               <?= $auth->csrfField() ?>
               <input type="hidden" name="action" value="del">

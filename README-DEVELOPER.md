@@ -358,7 +358,7 @@ cmd /c "gh secret set HOSTINGER_SSH_KEY --repo RodoDut/gastos-hogar < ""%TEMP%\g
 | Rate limiting (N intentos → lockout) | `Auth::login()` |
 | Passwords con `password_hash(PASSWORD_DEFAULT)` | `UserService::createUser()` |
 | Verificación con `password_verify()` | `Auth::login()` |
-| Cookies: `HttpOnly`, `SameSite=Strict`, `Secure` | bootstrap de `index.php` |
+| Cookies: `HttpOnly`, `SameSite=Lax`, `Secure` | bootstrap de `index.php` (Strict rompía la apertura del sitio desde apps externas como WhatsApp) |
 | Timeout de sesión configurable | `Auth::checkSessionTimeout()` |
 | `flock(LOCK_EX)` en escritura de JSON | todos los `JsonRepository` |
 | `data/` con permisos `700`, archivos `600` | post-deploy + repos |
@@ -386,7 +386,29 @@ El heredoc con comillas desactiva la expansión de variables en el runner de Git
 
 ---
 
+## Remember-me ("Recordarme")
+
+Implementado con el patrón selector/validator (Barry Jaspan) en `src/Auth/RememberMeService.php` + `data/tokens.json`. Cookie `remember_me`, 15 días, `HttpOnly`, `Secure`, `SameSite=Lax`. Cada uso rota el token (selector/validator nuevos, el viejo se borra) y detecta reuso de un token ya rotado como robo (`deleteAllForUser`).
+
+### Flujo correcto (post-fix)
+
+Tanto el login manual como el auto-login por cookie **deben** terminar en un `header('Location: ...'); exit;` (redirect 302) después de `Auth::loginAs()`, nunca renderizar la página directo en la misma respuesta que setea el `Set-Cookie`. Antes de este fix, el auto-login no redirigía y la rotación del token fallaba en el primer uso posterior (ver `attemptLogin()` en `RememberMeService.php` y el bloque correspondiente en `public/index.php`).
+
+### Comportamiento esperado por el usuario — importante
+
+Después de tildar "Recordarme" (o de que la cookie se rote automáticamente al reabrir el sitio), **hay que esperar unos 15-20 segundos antes de cerrar el navegador o quitarlo de la lista de apps recientes**. Chrome no escribe cada cookie a disco de inmediato: la mantiene en memoria y la vuelca a un archivo SQLite de forma diferida. Si el proceso del navegador se mata de forma abrupta (swipe desde recientes) muy poco después de que el servidor mandó el `Set-Cookie`, esa escritura puede perderse y la sesión no se recuerda — no es un bug de la app, es comportamiento del motor de cookies del navegador. Confirmado en Android (Motorola G82, Samsung A16) y desktop (Chrome Windows).
+
+Recomendación práctica: minimizar con el botón Home en vez de cerrar/quitar la app de recientes inmediatamente después de loguearse.
+
+Descartado durante el diagnóstico de este comportamiento (no repetir como hipótesis nueva): SameSite=Strict vs Lax (ya está en Lax), multi-selector por usuario, WebView embebido de WhatsApp, cookies de terceros bloqueadas, sync de configuración de Chrome entre dispositivos, cache de LiteSpeed/HCDN de Hostinger, permisos de archivo en `tokens.json`, y condición de carrera por rotación en pestañas múltiples (el `Set-Cookie` se confirmó correcto vía DevTools y `tokens.json` se confirmó que ni rota ni se corrompe — la cookie simplemente no llega al servidor tras un cierre abrupto).
+
+### Pendiente de limpieza
+
+Sacar el mensaje de debug de `templates/login.html.php` (agregado en PR #3 para diagnosticar este mismo bug) ahora que la causa está confirmada y resuelta.
+
 ## Próximas features planificadas
 
-- `feature/remember-me`: cookie persistente 15 días + rotación de token en `data/tokens.json`
+- `feature/notifications`: Alertas por email cuando un usuario agrega un gasto.
+- `feature/tickets`: Permite cargar comprobantes de cada gasto (PDF, JPG, PNG) y verlos en la lista de gastos. Lo interesante sería que se pudiera tomar una imagen con la cámara del celular y subirla directamente desde el navegador.
+ - `feature/smart-recognition`: OCR de comprobantes para autocompletar descripción, monto y fecha.
 - `feature/webauthn`: login por huella digital/Face ID usando WebAuthn API

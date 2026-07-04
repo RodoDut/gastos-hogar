@@ -1,3 +1,7 @@
+function submitTicketForm(input) {
+  input.form.submit();
+}
+
 function selectWho(btn) {
   document.getElementById('whoInput').value = btn.dataset.personId;
   document.querySelectorAll('.who-btn').forEach(function (b) {
