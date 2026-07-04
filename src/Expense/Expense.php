@@ -13,6 +13,7 @@ class Expense
         public readonly string $cat,
         public readonly string $date,
         public readonly string $ownerId,
+        public readonly ?string $ticketFilename = null,
     ) {}
 
     public function toArray(): array
@@ -25,19 +26,21 @@ class Expense
             'cat'      => $this->cat,
             'date'     => $this->date,
             'owner_id' => $this->ownerId,
+            'ticket'   => $this->ticketFilename,
         ];
     }
 
     public static function fromArray(array $data): self
     {
         return new self(
-            id:      $data['id'],
-            who:     $data['who'],
-            desc:    $data['desc'],
-            amt:     (float) $data['amt'],
-            cat:     $data['cat'],
-            date:    $data['date'],
-            ownerId: $data['owner_id'] ?? '',
+            id:             $data['id'],
+            who:            $data['who'],
+            desc:           $data['desc'],
+            amt:            (float) $data['amt'],
+            cat:            $data['cat'],
+            date:           $data['date'],
+            ownerId:        $data['owner_id'] ?? '',
+            ticketFilename: $data['ticket'] ?? null,
         );
     }
 }

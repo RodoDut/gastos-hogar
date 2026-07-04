@@ -49,6 +49,24 @@ class JsonExpenseRepository implements ExpenseRepositoryInterface
         $this->write($data);
     }
 
+    public function updateTicket(string $expenseId, ?string $ticketFilename): void
+    {
+        $data = $this->readRaw();
+
+        foreach ($data['expenses'] as $i => $row) {
+            if ($row['id'] === $expenseId) {
+                if ($ticketFilename === null) {
+                    unset($data['expenses'][$i]['ticket']);
+                } else {
+                    $data['expenses'][$i]['ticket'] = $ticketFilename;
+                }
+                break;
+            }
+        }
+
+        $this->write($data);
+    }
+
     private function readRows(): array
     {
         return $this->readRaw()['expenses'];
