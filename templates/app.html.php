@@ -212,7 +212,7 @@ if (isset($_GET['pending_ticket']) && preg_match('/^[a-f0-9]+\.(jpg|jpeg|png|pdf
           <div>🧾 Comprobante listo para adjuntar</div>
           <input type="hidden" name="pending_ticket" value="<?= e($pendingTicket) ?>">
           <?php else: ?>
-          <input type="file" name="ticket" accept="image/jpeg,image/png,application/pdf" capture="environment">
+          <input type="file" name="ticket" accept="image/jpeg,image/png,application/pdf">
           <?php endif ?>
         </div>
 
@@ -267,7 +267,7 @@ if (isset($_GET['pending_ticket']) && preg_match('/^[a-f0-9]+\.(jpg|jpeg|png|pdf
               <input type="hidden" name="month"  value="<?= e($curMonth) ?>">
               <label class="ticket-attach-btn" title="<?= $exp->ticketFilename !== null ? 'Reemplazar comprobante' : 'Adjuntar comprobante' ?>">
                 📎
-                <input type="file" name="ticket" accept="image/jpeg,image/png,application/pdf" capture="environment" onchange="submitTicketForm(this)" hidden>
+                <input type="file" name="ticket" accept="image/jpeg,image/png,application/pdf" onchange="submitTicketForm(this)" hidden>
               </label>
             </form>
             <?php if ($exp->ticketFilename !== null): ?>
