@@ -94,4 +94,5 @@ jobs:
                mkdir -p $DEPLOY_PATH/public_html && \
                [ -f $DEPLOY_PATH/public_html/index.php ] || echo '<?php require __DIR__ . \"/../public/index.php\";' > $DEPLOY_PATH/public_html/index.php && \
                ln -sfn $DEPLOY_PATH/public/assets $DEPLOY_PATH/public_html/assets && \
+               ln -sfn $DEPLOY_PATH/public/manifest.json $DEPLOY_PATH/public_html/manifest.json && \
                [ -f $DEPLOY_PATH/data/tokens.json ] || (echo '[]' > $DEPLOY_PATH/data/tokens.json && chmod 600 $DEPLOY_PATH/data/tokens.json)"
