@@ -22,6 +22,10 @@ function selectWho(btn) {
   btn.style.background = '#f8f9ff';
 }
 
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/assets/js/sw.js').catch(function () {});
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   var addForm = document.getElementById('addForm');
   if (addForm) {

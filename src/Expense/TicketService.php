@@ -61,6 +61,85 @@ class TicketService
         return $filename;
     }
 
+    public function storePending(array $file): string
+    {
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK
+            || !is_uploaded_file($file['tmp_name'] ?? '')
+        ) {
+            throw new InvalidTicketException('No se pudo subir el archivo.');
+        }
+
+        if (($file['size'] ?? 0) > $this->maxBytes) {
+            throw new InvalidTicketException('El archivo supera el tamaño máximo permitido.');
+        }
+
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime  = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+
+        if (!isset(self::ALLOWED_MIME_EXT[$mime])) {
+            throw new InvalidTicketException('Tipo de archivo no permitido. Solo se aceptan JPG, PNG o PDF.');
+        }
+
+        $ext      = self::ALLOWED_MIME_EXT[$mime];
+        $filename = bin2hex(random_bytes(8)) . '.' . $ext;
+        $pendingDir = $this->ticketsDir . '/pending';
+
+        if (!is_dir($pendingDir)) {
+            mkdir($pendingDir, 0700, true);
+        }
+
+        $htaccess = $pendingDir . '/.htaccess';
+        if (!file_exists($htaccess)) {
+            file_put_contents($htaccess, "Deny from all\n");
+        }
+
+        $dest = $pendingDir . '/' . $filename;
+        if (!move_uploaded_file($file['tmp_name'], $dest)) {
+            throw new InvalidTicketException('No se pudo guardar el archivo.');
+        }
+        @chmod($dest, 0600);
+
+        return $filename;
+    }
+
+    public function promotePending(string $pendingFilename, string $expenseId): string
+    {
+        $pendingPath = $this->ticketsDir . '/pending/' . basename($pendingFilename);
+
+        if (!is_file($pendingPath)) {
+            throw new InvalidTicketException('El comprobante pendiente ya no existe.');
+        }
+
+        $ext      = pathinfo($pendingPath, PATHINFO_EXTENSION);
+        $filename = $expenseId . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+        $dest     = $this->ticketsDir . '/' . $filename;
+
+        if (!rename($pendingPath, $dest)) {
+            throw new InvalidTicketException('No se pudo guardar el archivo.');
+        }
+        @chmod($dest, 0600);
+
+        return $filename;
+    }
+
+    public function cleanPending(int $maxAgeSeconds = 86400): void
+    {
+        $pendingDir = $this->ticketsDir . '/pending';
+        if (!is_dir($pendingDir)) {
+            return;
+        }
+
+        foreach (glob($pendingDir . '/*') ?: [] as $path) {
+            if (!is_file($path) || basename($path) === '.htaccess') {
+                continue;
+            }
+            if (time() - filemtime($path) > $maxAgeSeconds) {
+                @unlink($path);
+            }
+        }
+    }
+
     public function delete(?string $filename): void
     {
         if ($filename === null) {
