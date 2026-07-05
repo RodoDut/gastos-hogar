@@ -18,6 +18,11 @@
 /** @var bool $isNow */
 /** @var string $curMonth */
 /** @var string|null $appError */
+
+$pendingTicket = null;
+if (isset($_GET['pending_ticket']) && preg_match('/^[a-f0-9]+\.(jpg|jpeg|png|pdf)$/', $_GET['pending_ticket'])) {
+    $pendingTicket = $_GET['pending_ticket'];
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -25,6 +30,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Gastos del Hogar</title>
+<link rel="manifest" href="/manifest.json">
 <link rel="stylesheet" href="<?= asset('assets/css/app.css') ?>">
 </head>
 <body>
@@ -202,7 +208,12 @@
 
         <div class="span2">
           <label>📎 Comprobante (opcional)</label>
+          <?php if ($pendingTicket !== null): ?>
+          <div>🧾 Comprobante listo para adjuntar</div>
+          <input type="hidden" name="pending_ticket" value="<?= e($pendingTicket) ?>">
+          <?php else: ?>
           <input type="file" name="ticket" accept="image/jpeg,image/png,application/pdf" capture="environment">
+          <?php endif ?>
         </div>
 
         <div class="span2">
