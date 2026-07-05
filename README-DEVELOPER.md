@@ -508,3 +508,13 @@ Igual que el symlink, este archivo se pierde si alguien limpia `public_html/` a 
 - `feature/smart-recognition`: OCR de comprobantes para autocompletar descripción, monto y fecha.
 - `feature/webauthn`: login por huella digital/Face ID usando WebAuthn API
 - Google Drive Picker API para adjuntar comprobantes directo desde Drive (evaluado, descartado por ahora por complejidad: requiere proyecto en Google Cloud Console, OAuth, Picker API + Drive API. Workaround actual: descargar el archivo al dispositivo antes de subirlo, ya que subir directo desde Drive en modo streaming falla con `ERR_UPLOAD_FILE_CHANGED`).
+
+### Compatibilidad iOS Safari
+
+El Web Share Target API (compartir un PDF/foto desde otra app hacia la PWA instalada) es exclusivo de Chromium (Chrome/Edge Android). Safari/iOS no lo implementa y no hay indicios de que lo vaya a soportar — no tiene solución vía PWA estándar, es limitación de plataforma.
+
+El fallback ya existente cubre el caso de uso igual: el input `<input type="file" accept="image/jpeg,image/png,application/pdf">` en el form de alta/edición de gasto funciona en iOS Safari sin cambios adicionales.
+
+Se encontró y corregió un detalle: ambos inputs tenían capture="environment", que en iOS Safari fuerza la apertura directa de la cámara en vez de mostrar el selector completo (Fotos/Archivos/Cámara). Se sacó el atributo en ambos (form de alta y botón 📎 de adjuntar/reemplazar en la lista de gastos) — en Android no cambia el comportamiento del picker (sigue ofreciendo cámara + galería + archivos), y en iOS deja de forzar cámara.
+
+**Pendiente de verificación real:** probado sin regresión en Android 13 (Moto G82) en local. No se probó todavía en un dispositivo iOS real ni simulador — falta confirmar que el picker completo aparece como se espera.
