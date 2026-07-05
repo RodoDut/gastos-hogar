@@ -488,6 +488,18 @@ Hay un `public/assets/icons/icon.png` de 1254×1254 (1.3MB) sin optimizar, dejad
 
 `public_html/` en el servidor solo contiene `index.php` (proxy) y symlinks explícitos creados en el paso "Post-deploy setup" de `deploy.yml` — no es una copia ni un symlink de toda la carpeta `public/`. Cualquier archivo estático nuevo que se agregue en la **raíz** de `public/` (no dentro de `public/assets/`) necesita su propio `ln -sfn` explícito en ese paso, o quedará inaccesible (404) aunque el rsync lo haya copiado correctamente al servidor. Así se detectó y corrigió el 404 de `manifest.json` en producción: el archivo se desplegaba bien vía rsync pero no había symlink hacia él en `public_html/`.
 
+### `manifest.json` servido con Content-Type incorrecto
+
+Resuelto el 404, `manifest.json` respondía `200` pero con `Content-Type: application/json` en vez de `application/manifest+json` (el tipo MIME correcto para un Web App Manifest). El servidor Hostinger no tiene ese tipo MIME configurado por defecto. Fix: `public_html/.htaccess` (vive en `public_html/`, fuera de `public/`, por lo que el rsync no lo toca — está explícitamente excluido) con:
+
+```apache
+<Files "manifest.json">
+    AddType application/manifest+json .json
+</Files>
+```
+
+Igual que el symlink, este archivo se pierde si alguien limpia `public_html/` a mano, así que su creación es idempotente en el mismo paso "Post-deploy setup" de `deploy.yml`: si `.htaccess` no existe se crea vacío, y el bloque `AddType` solo se agrega si todavía no está presente (evita duplicarlo en cada deploy).
+
 ---
 
 ## Próximas features planificadas
