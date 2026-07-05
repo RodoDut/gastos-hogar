@@ -3,3 +3,7 @@
 /data/tickets/
 .env
 .claude/
+node_modules/
+package.json
+package-lock.json
+public/assets/images/

@@ -1,7 +1,7 @@
 # README — Developer
 
 Documentación técnica interna del proyecto **Gastos del Hogar**.  
-Última actualización: julio 2026.
+Última actualización: julio 2026 (comprobantes/tickets en producción; PWA + Web Share Target en curso en `develop`, ver sección correspondiente).
 
 ---
 
@@ -22,7 +22,11 @@ El proyecto sigue principios **SOLID** y una arquitectura en capas inspirada en 
 GastosHogar/
 ├── public/                          ← Entry point de la app (document root real)
 │   ├── index.php                    ← Front controller único
-│   └── assets/css, js
+│   ├── manifest.json                  ← Web App Manifest (PWA + share_target, ver sección PWA)
+│   └── assets/
+│       ├── css, js
+│       ├── js/sw.js                   ← Service worker minimo (solo requisito de instalabilidad, sin cache offline)
+│       └── icons/ (icon-192.png, icon-512.png)
 ├── src/
 │   ├── Config.php                   ← Configuración centralizada desde .env
 │   ├── helpers.php                  ← e(), money(), asset()
@@ -39,9 +43,11 @@ GastosHogar/
 │   ├── Admin/
 │   │   └── UserController.php       ← Panel admin: listar, crear, desactivar usuarios
 │   ├── Expense/
-│   │   ├── Expense.php              ← Entidad: id, who, ownerId, desc, amt, cat, date
+│   │   ├── Expense.php              ← Entidad: id, who, ownerId, desc, amt, cat, date, ticketFilename
 │   │   ├── ExpenseRepositoryInterface.php
-│   │   └── JsonExpenseRepository.php
+│   │   ├── JsonExpenseRepository.php
+│   │   ├── TicketService.php        ← Validación/storage/serving de comprobantes (ver sección Comprobantes)
+│   │   └── InvalidTicketException.php
 │   ├── Person/
 │   │   ├── Person.php
 │   │   ├── PersonRepositoryInterface.php
@@ -56,7 +62,9 @@ GastosHogar/
 ├── data/                            ← EXCLUIDO del rsync. Nunca se pisa en deploy.
 │   ├── gastos.json
 │   ├── people.json
-│   └── tokens.json                  ← Para feature remember-me (pendiente)
+│   ├── tokens.json                  ← Para feature remember-me
+│   └── tickets/                     ← Comprobantes. IGNORADO por git (.gitignore)
+│       └── pending/                 ← Comprobantes compartidos vía PWA sin gasto asociado todavía
 ├── scripts/                         ← EXCLUIDO del rsync. Solo uso local/SSH manual.
 │   ├── migrate-users.php            ← Agrega username/passwordHash/role/active a people.json
 │   └── migrate-add-owner.php        ← Agrega owner_id y normaliza who a UUID en gastos.json
@@ -152,6 +160,35 @@ Usuarios se desactivan (`"active": false`), **nunca se borran** (preserva integr
 ```
 
 `who` y `owner_id` son UUIDs (no nombres). Si un gasto antiguo tiene `who` como nombre literal, correr `migrate-add-owner.php`.
+
+---
+
+## Comprobantes (tickets)
+
+`feature/tickets` (mergeada a `main`, en producción). Cada gasto puede tener **un** comprobante (JPG/PNG/PDF) via el campo nullable `Expense::$ticketFilename`.
+
+### Modelo y storage
+
+- El nombre de archivo real nunca sale del cliente: `TicketService::store()` detecta el MIME real con `finfo_file()` (nunca `$_FILES['type']` ni la extensión declarada) y genera `{expenseId}_{random8hex}.{ext}`.
+- Se guarda en `data/tickets/` (chmod 700, `.htaccess Deny from all`, igual patrón que el resto de `data/`).
+- Tamaño máx configurable via `Config::$ticketMaxBytes` (default 4MB, override opcional `TICKET_MAX_BYTES` en `.env`).
+- Se sirve por ruta protegida `?page=ticket&eid={expenseId}` — el lookup es siempre por `eid` via `$expRepo->findById()`, nunca por filename crudo del cliente. Elimina cualquier path traversal/IDOR de raíz.
+
+### Autorización — asimétrica a propósito
+
+- **Ver** el comprobante: cualquier miembro logueado (mismo criterio que ya se aplica a ver gastos ajenos).
+- **Subir/reemplazar/quitar**: solo el owner del gasto, via `AuthorizationService::canEditExpense()`.
+
+### Acciones (`public/index.php`)
+
+| Acción | Qué hace |
+|---|---|
+| `add` (existente, extendida) | Si viene `$_FILES['ticket']`, lo valida/guarda antes de crear el `Expense` |
+| `attach_ticket` | Reemplaza el comprobante de un gasto existente. Guarda el nuevo ANTES de borrar el viejo (si el nuevo es inválido, no se pierde el anterior) |
+| `remove_ticket` | Quita el comprobante y la key `ticket` del JSON |
+| `del` (existente) | Además de borrar el gasto, borra el archivo de ticket asociado si existe (sin huérfanos) |
+
+Spinner indeterminado (`#ticketOverlay` + `.spinner` en `app.css`/`app.js`) durante las 3 acciones — feedback visual entre el submit y la navegación al redirect, no un progreso real en % (el patrón POST-Redirect-GET actual no se tocó).
 
 ---
 
@@ -406,9 +443,52 @@ Descartado durante el diagnóstico de este comportamiento (no repetir como hipó
 
 Sacar el mensaje de debug de `templates/login.html.php` (agregado en PR #3 para diagnosticar este mismo bug) ahora que la causa está confirmada y resuelta.
 
+---
+
+## PWA + Web Share Target — EN CURSO, NO MERGEADA A MAIN
+
+**Rama:** `feature/pwa-manifest`, mergeada solo a `develop` (commit local `f5b7ff1`, merge `503b570`). **NO está en `main` ni en producción.** `develop` local está 2 commits adelante de `origin/develop` sin pushear.
+
+### Objetivo
+
+Convertir el sitio en PWA instalable para que Android la ofrezca como destino en el menú nativo de "Compartir" (Web Share Target API) — compartir una foto/PDF desde la cámara/galería directo hacia el form de alta de gasto, sin pasar por el selector de archivos.
+
+### Implementado
+
+- `public/manifest.json`: manifest instalable + bloque `share_target` (`action: /index.php?page=share_ticket`, acepta `image/jpeg`, `image/png`, `application/pdf`).
+- `public/assets/js/sw.js`: service worker mínimo (`skipWaiting`/`clients.claim`/pass-through de `fetch`), sin cache offline — solo cumple el requisito de instalabilidad de Chrome.
+- `public/assets/icons/icon-192.png` e `icon-512.png`: íconos reales (casita sobre el gradiente `#4f46e5`→`#7c3aed` del header).
+- `TicketService::storePending()` / `promotePending()` / `cleanPending()`: comprobantes compartidos sin gasto asociado aún van a `data/tickets/pending/`, se promueven a `data/tickets/` recién al completar el alta del gasto.
+- Ruta `?page=share_ticket` en `index.php`, resuelta **antes** del gate de login global (bug real encontrado y corregido durante la implementación: si no, un POST sin sesión activa caía en el formulario de login completo en vez del mensaje mínimo esperado).
+- Sin CSRF en `share_ticket` a propósito: el POST lo arma el share sheet nativo de Android, no hay forma de inyectar el token, y no es explotable desde una página web de terceros (el share sheet es mediado por el SO).
+- UI: `templates/app.html.php` muestra "🧾 Comprobante listo para adjuntar" + `pending_ticket` hidden cuando llega `?pending_ticket=` en la URL.
+
+### Verificado
+
+- Service worker: `#activated and is running`, sin errores (confirmado en `chrome://inspect` remoto sobre el Moto G82 vía `adb reverse tcp:8080 tcp:8080`).
+- Manifest: Identity, Icons (192 y 512 cargan bien) sin errores de instalabilidad reales — los únicos warnings son opcionales (screenshots para Richer Install UI, `display-override`, `protocol_handlers`), ninguno bloquea instalación.
+- `php -l` limpio en todos los `.php` tocados.
+- Flujo `share_ticket` probado manualmente con POST simulado (curl/Postman con cookie de sesión): guarda en `pending/`, redirige con `pending_ticket`, `promotePending()` mueve el archivo al completar el alta.
+
+### Pendiente / bloqueado
+
+**El problema activo:** en el Moto G82 (Android, Chrome), el menú ⋮ solo ofrece "Agregar a la pantalla principal" (shortcut simple, sin manifest/SW real), nunca "Instalar app" (instalación PWA real, única que habilita el share target). Con manifest e íconos verificados sin errores, la hipótesis más probable es el **heurístico de "engagement"** que usa Chrome antes de ofrecer la instalación completa (visitas repetidas en días distintos), no un bug del código.
+
+**Próximo paso a probar:** desde `chrome://inspect#devices` en la laptop, con la pestaña del Moto G82 abierta, en el panel **Application → Manifest** hay un ícono ("Add to homescreen") que dispara el flujo de instalación real salteándose el heurístico — todavía no se probó. Si con eso instala completo, confirma que el manifest está 100% correcto y solo faltaba tiempo/uso repetido. Si aun así no ofrece instalar, hay que revisar de nuevo Network tab (íconos con 200 real, no cacheados con error) y la consola del `chrome://inspect` por errores silenciosos de JS al registrar el SW.
+
+**Herramienta nueva disponible:** `chrome-devtools-mcp` ya está instalado y conectado en Claude Code (`claude mcp add chrome-devtools --scope user npx chrome-devtools-mcp@latest`, scope user). Permite que el propio Claude Code inspeccione consola/red/manifest de una instancia de Chrome sin que haya que sacar capturas de pantalla manualmente. No probado aún contra Chrome de Android via remote debugging (`--browserUrl`), solo confirmado funcionando contra Chrome desktop.
+
+**Una vez resuelta la instalación:** falta la prueba end-to-end real de compartir una foto desde Android hacia la PWA instalada y confirmar que aparece "GastosHogar"/"Gastos" en el share sheet, y luego mergear `develop` → `main` siguiendo el flujo normal (push develop, validate.yml en verde, merge a main, push main, deploy.yml).
+
+### Detalle no incluido en el manifest
+
+Hay un `public/assets/icons/icon.png` de 1254×1254 (1.3MB) sin optimizar, dejado como posible fuente para versiones futuras de mayor densidad — no está declarado en `manifest.json` y no debería servirse tal cual (sin comprimir) si se llega a usar.
+
+---
+
 ## Próximas features planificadas
 
 - `feature/notifications`: Alertas por email cuando un usuario agrega un gasto.
-- `feature/tickets`: Permite cargar comprobantes de cada gasto (PDF, JPG, PNG) y verlos en la lista de gastos. Lo interesante sería que se pudiera tomar una imagen con la cámara del celular y subirla directamente desde el navegador.
- - `feature/smart-recognition`: OCR de comprobantes para autocompletar descripción, monto y fecha.
+- `feature/smart-recognition`: OCR de comprobantes para autocompletar descripción, monto y fecha.
 - `feature/webauthn`: login por huella digital/Face ID usando WebAuthn API
+- Google Drive Picker API para adjuntar comprobantes directo desde Drive (evaluado, descartado por ahora por complejidad: requiere proyecto en Google Cloud Console, OAuth, Picker API + Drive API. Workaround actual: descargar el archivo al dispositivo antes de subirlo, ya que subir directo desde Drive en modo streaming falla con `ERR_UPLOAD_FILE_CHANGED`).
