@@ -66,6 +66,10 @@ if (empty($_SESSION['csrf'])) {
     $_SESSION['csrf'] = bin2hex(random_bytes(32));
 }
 
+// ── Routing ───────────────────────────────────────────────────────
+$page = (isset($_GET['page']) && preg_match('/^[a-z_]+$/', $_GET['page']))
+    ? $_GET['page'] : 'app';
+
 // ── Session timeout ───────────────────────────────────────────────
 if ($auth->isLoggedIn() && !$auth->checkSessionTimeout()) {
     header('Location: ' . $_SERVER['PHP_SELF']);
@@ -86,9 +90,47 @@ if (!$auth->isLoggedIn()) {
     $rememberedUser = $rememberMe->attemptLogin();
     if ($rememberedUser !== null) {
         $auth->loginAs($rememberedUser);
-        header('Location: ' . $_SERVER['PHP_SELF']);
+        // Para share_ticket no redirigimos: perderíamos el archivo compartido en el POST.
+        if ($page !== 'share_ticket') {
+            header('Location: ' . $_SERVER['PHP_SELF']);
+            exit;
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  WEB SHARE TARGET — comprobante compartido desde otra app
+// ════════════════════════════════════════════════════════════════
+// Se resuelve antes del gate de login: una sesión sin loguear no debe
+// ver el formulario de login, sino el mensaje mínimo de "volvé a compartir".
+if ($page === 'share_ticket') {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        header('Location: ?page=app');
         exit;
     }
+
+    if (!$auth->isLoggedIn()) {
+        http_response_code(200);
+        echo '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">'
+            . '<title>GastosHogar</title></head><body>'
+            . '<p>Iniciá sesión en GastosHogar y volvé a compartir el archivo.</p>'
+            . '<p><a href="/">Ir a GastosHogar</a></p>'
+            . '</body></html>';
+        exit;
+    }
+
+    $ticketService->cleanPending();
+
+    try {
+        $pendingFilename = $ticketService->storePending($_FILES['ticket_shared'] ?? []);
+    } catch (InvalidTicketException $e) {
+        $_SESSION['app_error'] = $e->getMessage();
+        header('Location: ?page=app');
+        exit;
+    }
+
+    header('Location: ?page=app&pending_ticket=' . urlencode($pendingFilename));
+    exit;
 }
 
 // ── Login ─────────────────────────────────────────────────────────
@@ -125,10 +167,6 @@ function validDate(string $d): string
     $dt = DateTimeImmutable::createFromFormat('Y-m-d', $d);
     return ($dt && $dt->format('Y-m-d') === $d) ? $d : date('Y-m-d');
 }
-
-// ── Routing ───────────────────────────────────────────────────────
-$page = (isset($_GET['page']) && preg_match('/^[a-z_]+$/', $_GET['page']))
-    ? $_GET['page'] : 'app';
 
 // ════════════════════════════════════════════════════════════════
 //  SETTINGS
@@ -274,6 +312,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 if (!empty($_FILES['ticket']['name'] ?? '')) {
                     $ticketFilename = $ticketService->store($expenseId, $_FILES['ticket']);
+                } elseif (!empty($_POST['pending_ticket'] ?? '')) {
+                    $ticketFilename = $ticketService->promotePending($_POST['pending_ticket'], $expenseId);
                 }
 
                 $expRepo->add(new Expense(
