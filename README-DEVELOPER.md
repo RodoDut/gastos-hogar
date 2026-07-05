@@ -445,9 +445,9 @@ Sacar el mensaje de debug de `templates/login.html.php` (agregado en PR #3 para 
 
 ---
 
-## PWA + Web Share Target — EN CURSO, NO MERGEADA A MAIN
+## PWA + Web Share Target — EN CURSO
 
-**Rama:** `feature/pwa-manifest`, mergeada solo a `develop` (commit local `f5b7ff1`, merge `503b570`). **NO está en `main` ni en producción.** `develop` local está 2 commits adelante de `origin/develop` sin pushear.
+**Rama:** `feature/pwa-manifest`, mergeada a `develop` (commit local `f5b7ff1`, merge `503b570`) y luego a `main` (merge `026e91f`). **Ya está en producción.** El 404 de `manifest.json` detectado tras ese deploy se corrigió en `fix/pwa-manifest-symlink` (ver sección "`public_html` no espeja 1:1 la carpeta `public/`" más abajo).
 
 ### Objetivo
 
@@ -483,6 +483,10 @@ Convertir el sitio en PWA instalable para que Android la ofrezca como destino en
 ### Detalle no incluido en el manifest
 
 Hay un `public/assets/icons/icon.png` de 1254×1254 (1.3MB) sin optimizar, dejado como posible fuente para versiones futuras de mayor densidad — no está declarado en `manifest.json` y no debería servirse tal cual (sin comprimir) si se llega a usar.
+
+### `public_html` no espeja 1:1 la carpeta `public/`
+
+`public_html/` en el servidor solo contiene `index.php` (proxy) y symlinks explícitos creados en el paso "Post-deploy setup" de `deploy.yml` — no es una copia ni un symlink de toda la carpeta `public/`. Cualquier archivo estático nuevo que se agregue en la **raíz** de `public/` (no dentro de `public/assets/`) necesita su propio `ln -sfn` explícito en ese paso, o quedará inaccesible (404) aunque el rsync lo haya copiado correctamente al servidor. Así se detectó y corrigió el 404 de `manifest.json` en producción: el archivo se desplegaba bien vía rsync pero no había symlink hacia él en `public_html/`.
 
 ---
 
