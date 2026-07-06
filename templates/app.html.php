@@ -218,7 +218,8 @@ if (isset($_GET['pending_ticket']) && preg_match('/^[a-f0-9]+\.(jpg|jpeg|png|pdf
           <div>🧾 Comprobante listo para adjuntar</div>
           <input type="hidden" name="pending_ticket" value="<?= e($pendingTicket) ?>">
           <?php else: ?>
-          <input type="file" name="ticket" accept="image/jpeg,image/png,application/pdf">
+          <input type="file" name="ticket" id="ticketFileInput" accept="image/jpeg,image/png,application/pdf">
+          <input type="hidden" name="pending_ticket" id="pendingTicketInput" value="">
           <?php endif ?>
         </div>
 

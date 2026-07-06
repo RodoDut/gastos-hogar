@@ -19,6 +19,8 @@ use GastosHogar\Expense\Expense;
 use GastosHogar\Expense\InvalidTicketException;
 use GastosHogar\Expense\JsonExpenseRepository;
 use GastosHogar\Expense\TicketService;
+use GastosHogar\Ocr\ClaudeVisionOcrProvider;
+use GastosHogar\Ocr\OcrException;
 use GastosHogar\Person\Person;
 use GastosHogar\Person\JsonPersonRepository;
 use GastosHogar\User\JsonUserRepository;
@@ -296,6 +298,32 @@ $curMonth = validMonth($_POST['month'] ?? $_GET['month'] ?? date('Y-m'));
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $auth->validateCsrf();
     $action = $_POST['action'] ?? '';
+
+    // ── Smart Recognition: OCR de comprobantes vía Claude Vision ───────
+    // Llamado por fetch() desde el JS del form de alta, no es un submit
+    // normal: responde JSON y corta acá, sin pasar por el redirect final.
+    if ($action === 'ocr_scan') {
+        header('Content-Type: application/json');
+
+        try {
+            $ticketService->cleanPending();
+            $pendingFilename = $ticketService->storePending($_FILES['ticket'] ?? []);
+            $ocrProvider     = new ClaudeVisionOcrProvider($config->anthropicApiKey);
+            $result          = $ocrProvider->extract($root . '/data/tickets/pending/' . $pendingFilename);
+
+            echo json_encode([
+                'desc'           => $result->desc,
+                'amt'            => $result->amt,
+                'date'           => $result->date,
+                'pending_ticket' => $pendingFilename,
+            ]);
+        } catch (InvalidTicketException|OcrException $e) {
+            http_response_code(422);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+
+        exit;
+    }
 
     try {
         if ($action === 'add' && !empty(trim($_POST['desc'] ?? '')) && isset($_POST['amt'])) {
