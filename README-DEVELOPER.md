@@ -1,7 +1,7 @@
 # README — Developer
 
 Documentación técnica interna del proyecto **Gastos del Hogar**.  
-Última actualización: julio 2026 (comprobantes/tickets en producción; PWA + Web Share Target en curso en `develop`, ver sección correspondiente).
+Última actualización: julio 2026 (v1.0 tagged en `main` — comprobantes/tickets, roles/usuarios, remember-me y PWA + Web Share Target confirmados en producción; scaffolding de OCR en rama separada, no mergeado, ver sección correspondiente).
 
 ---
 
@@ -11,6 +11,20 @@ App web PHP para registrar y balancear gastos compartidos entre los miembros de 
 
 **URL de producción:** https://gastos.rdtecno.net  
 **Repositorio:** https://github.com/RodoDut/gastos-hogar
+
+---
+
+## Estado del proyecto
+
+**v1.0** tageada y pusheada en `main` (MVP completo y funcional en producción). Incluye:
+
+- Registro/balance de gastos, comprobantes adjuntos, sistema de usuarios con roles, remember-me, y PWA + Web Share Target (instalación confirmada en Moto G82).
+- `README.md` público agregado en la raíz del repo (documentación orientada a recruiters/terceros, sin detalle interno de infraestructura).
+- Licencia **MIT** (antes "proprietary" en `composer.json`, corregido para coincidir). Copyright: Rodolfo M. Duttweiler (RD-Tecno).
+
+**Fuera del alcance de v1.0, explícitamente:**
+
+- **Smart Recognition (OCR)**: scaffolding ya generado por Claude Code (`src/Ocr/*`, más cambios en `app.js`, `index.php`, `Config.php`, `templates/app.html.php`) pero viviendo en rama propia `feature/ocr-smart-recognition` (pusheada a `origin`, sin PR abierto). **No mergeado a `develop` ni a `main`.** Ver sección "Próximas features planificadas" para el detalle de arquitectura ya acordado.
 
 ---
 
@@ -253,7 +267,7 @@ php scripts/migrate-add-owner.php
 **Opción 1 — File Manager de Hostinger (más simple):**
 Subir desde hPanel → File Manager a:
 ```
-/home/<HOSTINGER_USER>/domains/gastos.rdtecno.net/data/people.json
+<HOSTINGER_REMOTE_PATH>/data/people.json
 ```
 
 **Opción 2 — SCP desde Git Bash (no desde PowerShell/CMD):**
@@ -261,7 +275,7 @@ Subir desde hPanel → File Manager a:
 # Desde Git Bash, no PowerShell
 scp -P <HOSTINGER_SSH_PORT> -i <PATH_TO_DEPLOY_KEY> \
   data/people.json \
-  <HOSTINGER_USER>@<HOSTINGER_IP>:/home/<HOSTINGER_USER>/domains/gastos.rdtecno.net/data/people.json
+  <HOSTINGER_USER>@<HOSTINGER_IP>:<HOSTINGER_REMOTE_PATH>/data/people.json
 ```
 
 > La clave SSH tiene problemas de permisos en PowerShell/CMD de Windows. Usar siempre **Git Bash** para SSH/SCP manuales.
@@ -320,7 +334,7 @@ Nunca trabajar directo en `develop` ni en `main`. Siempre desde una rama de feat
 | `HOSTINGER_HOST` | `<HOSTINGER_IP>` |
 | `HOSTINGER_SSH_PORT` | `<HOSTINGER_SSH_PORT>` |
 | `HOSTINGER_USER` | `<HOSTINGER_USER>` |
-| `HOSTINGER_REMOTE_PATH` | `/home/<HOSTINGER_USER>/domains/gastos.rdtecno.net` |
+| `HOSTINGER_REMOTE_PATH` | `<HOSTINGER_REMOTE_PATH>` |
 | `APP_PASS` | Valor legacy requerido por dotenv |
 
 ---
@@ -344,7 +358,7 @@ Si por alguna razón se pierde (limpieza manual del servidor), el próximo push 
 ### Estructura completa en el servidor
 
 ```
-/home/<HOSTINGER_USER>/domains/gastos.rdtecno.net/
+<HOSTINGER_REMOTE_PATH>/
 ├── src/
 ├── templates/
 ├── public/
@@ -445,7 +459,7 @@ Sacar el mensaje de debug de `templates/login.html.php` (agregado en PR #3 para 
 
 ---
 
-## PWA + Web Share Target — EN CURSO
+## PWA + Web Share Target — COMPLETADA (v1.0)
 
 **Rama:** `feature/pwa-manifest`, mergeada a `develop` (commit local `f5b7ff1`, merge `503b570`) y luego a `main` (merge `026e91f`). **Ya está en producción.** El 404 de `manifest.json` detectado tras ese deploy se corrigió en `fix/pwa-manifest-symlink` (ver sección "`public_html` no espeja 1:1 la carpeta `public/`" más abajo).
 
@@ -470,15 +484,9 @@ Convertir el sitio en PWA instalable para que Android la ofrezca como destino en
 - `php -l` limpio en todos los `.php` tocados.
 - Flujo `share_ticket` probado manualmente con POST simulado (curl/Postman con cookie de sesión): guarda en `pending/`, redirige con `pending_ticket`, `promotePending()` mueve el archivo al completar el alta.
 
-### Pendiente / bloqueado
+### Resuelto
 
-**El problema activo:** en el Moto G82 (Android, Chrome), el menú ⋮ solo ofrece "Agregar a la pantalla principal" (shortcut simple, sin manifest/SW real), nunca "Instalar app" (instalación PWA real, única que habilita el share target). Con manifest e íconos verificados sin errores, la hipótesis más probable es el **heurístico de "engagement"** que usa Chrome antes de ofrecer la instalación completa (visitas repetidas en días distintos), no un bug del código.
-
-**Próximo paso a probar:** desde `chrome://inspect#devices` en la laptop, con la pestaña del Moto G82 abierta, en el panel **Application → Manifest** hay un ícono ("Add to homescreen") que dispara el flujo de instalación real salteándose el heurístico — todavía no se probó. Si con eso instala completo, confirma que el manifest está 100% correcto y solo faltaba tiempo/uso repetido. Si aun así no ofrece instalar, hay que revisar de nuevo Network tab (íconos con 200 real, no cacheados con error) y la consola del `chrome://inspect` por errores silenciosos de JS al registrar el SW.
-
-**Herramienta nueva disponible:** `chrome-devtools-mcp` ya está instalado y conectado en Claude Code (`claude mcp add chrome-devtools --scope user npx chrome-devtools-mcp@latest`, scope user). Permite que el propio Claude Code inspeccione consola/red/manifest de una instancia de Chrome sin que haya que sacar capturas de pantalla manualmente. No probado aún contra Chrome de Android via remote debugging (`--browserUrl`), solo confirmado funcionando contra Chrome desktop.
-
-**Una vez resuelta la instalación:** falta la prueba end-to-end real de compartir una foto desde Android hacia la PWA instalada y confirmar que aparece "GastosHogar"/"Gastos" en el share sheet, y luego mergear `develop` → `main` siguiendo el flujo normal (push develop, validate.yml en verde, merge a main, push main, deploy.yml).
+El Moto G82 (Android, Chrome) ya ofrece "Instalar app" desde el menú ⋮ (no solo el shortcut simple). Confirma que el manifest y el service worker estaban correctos y que el bloqueo previo era el heurístico de "engagement" de Chrome (visitas repetidas), no un bug de la app. Feature dada por completada y mergeada a `main` como parte de v1.0.
 
 ### Detalle no incluido en el manifest
 
@@ -505,7 +513,7 @@ Igual que el symlink, este archivo se pierde si alguien limpia `public_html/` a 
 ## Próximas features planificadas
 
 - `feature/notifications`: Alertas por email cuando un usuario agrega un gasto.
-- `feature/smart-recognition`: OCR de comprobantes para autocompletar descripción, monto y fecha.
+- `feature/smart-recognition` (OCR de comprobantes): arquitectura acordada y **scaffolding ya generado** por Claude Code en la rama `feature/ocr-smart-recognition` (pusheada a `origin`, no mergeada). Provider `ClaudeVisionOcrProvider` (Claude Vision API, modelo `claude-haiku-4-5-20251001`) detrás de `OcrProviderInterface` (`extract(string $filePath): OcrResult`), DTO `OcrResult` readonly (desc/amt/date/rawResponse), `OcrException`. Costo estimado ~$0,24/mes para 100 comprobantes. Pendiente antes de mergear: revisar el diff completo (toca también `app.js`, `index.php`, `Config.php`, `templates/app.html.php`), y agregar `ANTHROPIC_API_KEY` a mano en el `.env` de producción vía SSH (`deploy.yml` no actualiza `.env` en deploys posteriores al primero).
 - `feature/webauthn`: login por huella digital/Face ID usando WebAuthn API
 - Google Drive Picker API para adjuntar comprobantes directo desde Drive (evaluado, descartado por ahora por complejidad: requiere proyecto en Google Cloud Console, OAuth, Picker API + Drive API. Workaround actual: descargar el archivo al dispositivo antes de subirlo, ya que subir directo desde Drive en modo streaming falla con `ERR_UPLOAD_FILE_CHANGED`).
 
