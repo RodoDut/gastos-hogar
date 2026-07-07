@@ -254,7 +254,7 @@ if (isset($_GET['pending_ticket']) && preg_match('/^[a-f0-9]+\.(jpg|jpeg|png|pdf
                 </span>
                 <?php endif ?>
                 <?php if ($exp->ticketFilename !== null): ?>
-                <a href="?page=ticket&eid=<?= e($exp->id) ?>" target="_blank" rel="noopener" class="ticket-link" title="Ver comprobante">📎 Comprobante</a>
+                <a href="?page=ticket&eid=<?= e($exp->id) ?>" class="ticket-link" title="Ver comprobante">📎 Comprobante</a>
                 <?php endif ?>
               </div>
             </div>
