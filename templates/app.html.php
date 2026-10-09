@@ -160,18 +160,24 @@ if (isset($_GET['pending_ticket']) && preg_match('/^[a-f0-9]+\.(jpg|jpeg|png|pdf
       <?= $auth->csrfField() ?>
       <input type="hidden" name="action" value="add">
       <input type="hidden" name="month"  value="<?= e($curMonth) ?>">
-      <input type="hidden" name="who"    id="whoInput" value="<?= e($people[0]->id ?? '') ?>">
+      <?php
+      // Preseleccionar al usuario logueado si existe entre las personas configuradas;
+      // si no está (p.ej. borrado de personas pero no de usuarios), cae al primero.
+      $defaultWhoId = isset($peopleById[$actor->id]) ? $actor->id : ($people[0]->id ?? '');
+      ?>
+      <input type="hidden" name="who"    id="whoInput" value="<?= e($defaultWhoId) ?>">
 
       <div class="fg">
 
         <div class="span2">
           <label>¿Quién pagó?</label>
           <div class="who-btns">
-            <?php foreach ($people as $i => $person):
-              $color = $peopleColors[$person->id]; ?>
+            <?php foreach ($people as $person):
+              $color    = $peopleColors[$person->id];
+              $isActive = $person->id === $defaultWhoId; ?>
             <button type="button"
-                    class="who-btn<?= $i === 0 ? ' who-btn--active' : '' ?>"
-                    <?= $i === 0 ? 'style="border-color:' . e($color) . ';color:' . e($color) . ';background:#f8f9ff"' : '' ?>
+                    class="who-btn<?= $isActive ? ' who-btn--active' : '' ?>"
+                    <?= $isActive ? 'style="border-color:' . e($color) . ';color:' . e($color) . ';background:#f8f9ff"' : '' ?>
                     data-person-id="<?= e($person->id) ?>"
                     data-person-color="<?= e($color) ?>"
                     onclick="selectWho(this)">

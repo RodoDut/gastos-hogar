@@ -121,6 +121,12 @@ if ($page === 'share_ticket') {
 
     $ticketService->cleanPending();
 
+    error_log('[share_ticket] ' . json_encode([
+    'files' => $_FILES,
+    'len'   => $_SERVER['CONTENT_LENGTH'] ?? null,
+    'ctype' => $_SERVER['CONTENT_TYPE'] ?? null,
+        ]));
+
     try {
         $pendingFilename = $ticketService->storePending($_FILES['ticket_shared'] ?? []);
     } catch (InvalidTicketException $e) {
