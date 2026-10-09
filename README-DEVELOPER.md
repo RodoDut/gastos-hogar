@@ -488,6 +488,33 @@ Convertir el sitio en PWA instalable para que Android la ofrezca como destino en
 
 El Moto G82 (Android, Chrome) ya ofrece "Instalar app" desde el menú ⋮ (no solo el shortcut simple). Confirma que el manifest y el service worker estaban correctos y que el bloqueo previo era el heurístico de "engagement" de Chrome (visitas repetidas), no un bug de la app. Feature dada por completada y mergeada a `main` como parte de v1.0.
 
+### Bug real encontrado post-v1.0: compartir desde otra app fallaba con "No se pudo subir el archivo" (2026-10)
+
+Lo marcado como "Verificado" arriba nunca probó el flujo real: el POST se simuló con curl/Postman, nunca se compartió un archivo de verdad desde el share sheet nativo de Android. Al hacerlo por primera vez, fallaba siempre con `InvalidTicketException: No se pudo subir el archivo.` — pero el mismo archivo subido a mano con el selector de archivos de la app funcionaba perfecto, lo que descartó límites de tamaño/MIME de PHP o de `TicketService`.
+
+**Causa:** `public/assets/js/sw.js` interceptaba *todas* las fetch, incluida la navegación POST especial que genera el Web Share Target:
+
+```js
+self.addEventListener('fetch', function (event) {
+  event.respondWith(fetch(event.request));
+});
+```
+
+Chrome ya inspecciona/consume el body multipart de esa POST (para filtrarlo contra el `accept` del `share_target` del manifest) antes de disparar el evento `fetch` del service worker. Al hacer `fetch(event.request)` para reenviarla, el body (el archivo) llega vacío o incompleto al servidor — de ahí que `$_FILES['ticket_shared']` no pase el chequeo de `UPLOAD_ERR_OK` / `is_uploaded_file()` en `TicketService::storePending()`. Es un problema conocido de combinar Web Share Target con un service worker que intercepta todo el tráfico sin excluir POST.
+
+**Fix:** el fetch handler ahora ignora cualquier método que no sea `GET`, dejando pasar la navegación POST del share target sin tocarla (no hay cache offline, así que no hay nada que ganar interceptándola):
+
+```js
+self.addEventListener('fetch', function (event) {
+  if (event.request.method !== 'GET') {
+    return;
+  }
+  event.respondWith(fetch(event.request));
+});
+```
+
+**Gotcha de deploy:** el service worker viejo puede seguir activo en el celular hasta que Chrome detecte la actualización (`skipWaiting`/`clients.claim` ayudan, pero no son instantáneos) — para probar el fix hay que cerrar del todo la PWA (sacarla de apps recientes) y volver a abrirla, o en el peor caso desinstalar/reinstalar el acceso directo.
+
 ### Detalle no incluido en el manifest
 
 Hay un `public/assets/icons/icon.png` de 1254×1254 (1.3MB) sin optimizar, dejado como posible fuente para versiones futuras de mayor densidad — no está declarado en `manifest.json` y no debería servirse tal cual (sin comprimir) si se llega a usar.
