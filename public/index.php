@@ -164,7 +164,9 @@ if ($page === 'share_ticket') {
             'reason'  => $e->reason(),
             'details' => $e->details(),
         ]);
-        $_SESSION['app_error'] = $e->getMessage();
+        $_SESSION['app_error'] = $e->reason() === 'upload_err_no_file'
+            ? 'No se recibió el archivo desde esa app. Descargalo y adjuntalo con 📎.'
+            : $e->getMessage();
         header('Location: ?page=app');
         exit;
     }
