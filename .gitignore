@@ -1,6 +1,7 @@
 /vendor/
 /data/*.json
 /data/tickets/
+/data/logs/
 .env
 .claude/
 node_modules/
