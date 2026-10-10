@@ -515,6 +515,18 @@ self.addEventListener('fetch', function (event) {
 
 **Gotcha de deploy:** el service worker viejo puede seguir activo en el celular hasta que Chrome detecte la actualización (`skipWaiting`/`clients.claim` ayudan, pero no son instantáneos) — para probar el fix hay que cerrar del todo la PWA (sacarla de apps recientes) y volver a abrirla, o en el peor caso desinstalar/reinstalar el acceso directo.
 
+### Bug externo sin resolver: Chrome/Android descarta el archivo del Web Share Target en WebAPKs (2026-10, abierto)
+
+Después del fix del service worker arriba, seguía fallando al compartir desde otra app (cámara/galería/WhatsApp) — pero con el mismo archivo funcionando perfecto por el selector de archivos (📎) dentro de la app. Confirmado por ADB sobre el Moto G82: Android 13 (SDK 33), Chrome Stable `155.0.8059.39`, WebAPK `org.chromium.webapk.a5cb56eb82ccd3fb9_v2` con `gastos.rdtecno.net` verificado.
+
+**No es un bug de GastosHogar.** Es un bug de Chromium, público y activo: `Blink>WebShare`, "Web Share Target on Android drops shared files from installed PWAs; text still arrives". Reportado el 2026-09-14, reabierto el 2026-10-09 (comentario #33) por seguir reproduciéndose en hardware real.
+
+**Causa (según el hilo de Chromium):** el CL `8280393` ("Verify caller URI permissions before Web Share Target in TWA", mergeado en Chrome 153) agrega una verificación de permisos sobre el `content://` URI del archivo compartido antes de entregarlo al share target. Esa verificación depende de un bundle de permisos (`EXTRA_VERIFIED_SHARE_DATA`) o de una sesión CCT — ninguno de los dos existe en el launch path de un **WebAPK** (`WebappLauncherActivity`), a diferencia de una TWA/CCT. Resultado: el chequeo falla siempre para WebAPKs, Chrome descarta cada parte de archivo del multipart (`Log.w("Caller does not have read permission for share URI: ...")`) y solo sobreviven los campos de texto — que nuestro `share_target` no declara, así que no llega nada reconocible. Coincide exactamente con lo que vimos: el POST llega, pero sin el archivo.
+
+El fix "oficial" (`ksukh@chromium.org`) se mergeó a M154/M155/M156 y se dio por verificado en builds de escritorio Android (Redrix/Mica), pero múltiples reportes sobre hardware real con Android 10/13 (incluido el propio equipo de QA de Google) muestran que **sigue roto** — hipótesis del hilo: en Android < 15 el fix valida con `checkUriPermission()` contra el UID del WebAPK, y el grant temporal que la app que comparte le dio al WebAPK shell ya puede haber expirado para cuando Chrome lo chequea.
+
+**No hay nada para arreglar del lado de GastosHogar**: el archivo nunca sale del dispositivo. Mitigación ya en producción: el mensaje de `public/index.php` para `reason() === 'upload_err_no_file'` ("No se recibió el archivo desde esa app. Descargalo y adjuntalo con 📎.") — ver sección de logging más abajo. Mientras el bug esté abierto, el selector de archivos dentro de la app es el único camino confiable.
+
 ### Detalle no incluido en el manifest
 
 Hay un `public/assets/icons/icon.png` de 1254×1254 (1.3MB) sin optimizar, dejado como posible fuente para versiones futuras de mayor densidad — no está declarado en `manifest.json` y no debería servirse tal cual (sin comprimir) si se llega a usar.
