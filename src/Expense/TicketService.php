@@ -22,25 +22,7 @@ class TicketService
 
     public function store(string $expenseId, array $file): string
     {
-        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK
-            || !is_uploaded_file($file['tmp_name'] ?? '')
-        ) {
-            throw new InvalidTicketException('No se pudo subir el archivo.');
-        }
-
-        if (($file['size'] ?? 0) > $this->maxBytes) {
-            throw new InvalidTicketException('El archivo supera el tamaño máximo permitido.');
-        }
-
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $mime  = finfo_file($finfo, $file['tmp_name']);
-        finfo_close($finfo);
-
-        if (!isset(self::ALLOWED_MIME_EXT[$mime])) {
-            throw new InvalidTicketException('Tipo de archivo no permitido. Solo se aceptan JPG, PNG o PDF.');
-        }
-
-        $ext      = self::ALLOWED_MIME_EXT[$mime];
+        $ext      = $this->assertValidUpload($file);
         $filename = $expenseId . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
 
         if (!is_dir($this->ticketsDir)) {
@@ -54,7 +36,7 @@ class TicketService
 
         $dest = $this->ticketsDir . '/' . $filename;
         if (!move_uploaded_file($file['tmp_name'], $dest)) {
-            throw new InvalidTicketException('No se pudo guardar el archivo.');
+            throw new InvalidTicketException('No se pudo guardar el archivo.', 'move_failed');
         }
         @chmod($dest, 0600);
 
@@ -63,26 +45,8 @@ class TicketService
 
     public function storePending(array $file): string
     {
-        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK
-            || !is_uploaded_file($file['tmp_name'] ?? '')
-        ) {
-            throw new InvalidTicketException('No se pudo subir el archivo.');
-        }
-
-        if (($file['size'] ?? 0) > $this->maxBytes) {
-            throw new InvalidTicketException('El archivo supera el tamaño máximo permitido.');
-        }
-
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $mime  = finfo_file($finfo, $file['tmp_name']);
-        finfo_close($finfo);
-
-        if (!isset(self::ALLOWED_MIME_EXT[$mime])) {
-            throw new InvalidTicketException('Tipo de archivo no permitido. Solo se aceptan JPG, PNG o PDF.');
-        }
-
-        $ext      = self::ALLOWED_MIME_EXT[$mime];
-        $filename = bin2hex(random_bytes(8)) . '.' . $ext;
+        $ext        = $this->assertValidUpload($file);
+        $filename   = bin2hex(random_bytes(8)) . '.' . $ext;
         $pendingDir = $this->ticketsDir . '/pending';
 
         if (!is_dir($pendingDir)) {
@@ -96,7 +60,7 @@ class TicketService
 
         $dest = $pendingDir . '/' . $filename;
         if (!move_uploaded_file($file['tmp_name'], $dest)) {
-            throw new InvalidTicketException('No se pudo guardar el archivo.');
+            throw new InvalidTicketException('No se pudo guardar el archivo.', 'move_failed');
         }
         @chmod($dest, 0600);
 
@@ -108,7 +72,7 @@ class TicketService
         $pendingPath = $this->ticketsDir . '/pending/' . basename($pendingFilename);
 
         if (!is_file($pendingPath)) {
-            throw new InvalidTicketException('El comprobante pendiente ya no existe.');
+            throw new InvalidTicketException('El comprobante pendiente ya no existe.', 'pending_missing');
         }
 
         $ext      = pathinfo($pendingPath, PATHINFO_EXTENSION);
@@ -116,7 +80,7 @@ class TicketService
         $dest     = $this->ticketsDir . '/' . $filename;
 
         if (!rename($pendingPath, $dest)) {
-            throw new InvalidTicketException('No se pudo guardar el archivo.');
+            throw new InvalidTicketException('No se pudo guardar el archivo.', 'move_failed');
         }
         @chmod($dest, 0600);
 
@@ -169,5 +133,64 @@ class TicketService
         header('Content-Disposition: inline; filename="' . basename($filename) . '"');
         readfile($path);
         exit;
+    }
+
+    /**
+     * Valida un $_FILES['campo'] y devuelve la extensión destino si es válido.
+     * Centraliza lo que antes estaba duplicado en store() y storePending().
+     */
+    private function assertValidUpload(array $file): string
+    {
+        $errorCode = $file['error'] ?? UPLOAD_ERR_NO_FILE;
+
+        if ($errorCode !== UPLOAD_ERR_OK) {
+            throw match ($errorCode) {
+                UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => new InvalidTicketException(
+                    'El archivo supera el tamaño máximo permitido.',
+                    'upload_err_ini_size',
+                    ['upload_error_code' => $errorCode],
+                ),
+                UPLOAD_ERR_NO_FILE => new InvalidTicketException(
+                    'No se recibió ningún archivo.',
+                    'upload_err_no_file',
+                    ['upload_error_code' => $errorCode],
+                ),
+                default => new InvalidTicketException(
+                    'No se pudo subir el archivo.',
+                    'not_uploaded_file',
+                    ['upload_error_code' => $errorCode],
+                ),
+            };
+        }
+
+        if (!is_uploaded_file($file['tmp_name'] ?? '')) {
+            throw new InvalidTicketException(
+                'No se pudo subir el archivo.',
+                'not_uploaded_file',
+                ['upload_error_code' => $errorCode],
+            );
+        }
+
+        if (($file['size'] ?? 0) > $this->maxBytes) {
+            throw new InvalidTicketException(
+                'El archivo supera el tamaño máximo permitido.',
+                'too_large',
+                ['size' => $file['size'] ?? 0],
+            );
+        }
+
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime  = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+
+        if (!isset(self::ALLOWED_MIME_EXT[$mime])) {
+            throw new InvalidTicketException(
+                'Tipo de archivo no permitido. Solo se aceptan JPG, PNG o PDF.',
+                'mime_not_allowed',
+                ['mime' => $mime],
+            );
+        }
+
+        return self::ALLOWED_MIME_EXT[$mime];
     }
 }
