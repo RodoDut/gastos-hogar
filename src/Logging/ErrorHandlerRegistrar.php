@@ -29,9 +29,18 @@ final class ErrorHandlerRegistrar
 
     private function handleError(int $severity, string $message, string $file = '', int $line = 0): bool
     {
-        // Obligatorio: @chmod/@unlink/@file_put_contents bajan error_reporting()
-        // pero no lo anulan, así que un error silenciado a propósito no debe logearse.
+        // @chmod/@unlink/@file_put_contents bajan error_reporting() pero no lo
+        // anulan: un error silenciado a propósito no debe mostrarse ni tratarse
+        // como el resto, pero tampoco se descarta en silencio total — queda en
+        // debug con 'suppressed' => true para no perder rastro si hace falta.
         if (!(error_reporting() & $severity)) {
+            $this->logger->debug($message, [
+                'severity'   => $severity,
+                'file'       => $file,
+                'line'       => $line,
+                'suppressed' => true,
+            ]);
+
             return false;
         }
 

@@ -145,9 +145,19 @@ class TicketService
 
         if ($errorCode !== UPLOAD_ERR_OK) {
             throw match ($errorCode) {
-                UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => new InvalidTicketException(
+                UPLOAD_ERR_INI_SIZE => new InvalidTicketException(
                     'El archivo supera el tamaño máximo permitido.',
                     'upload_err_ini_size',
+                    ['upload_error_code' => $errorCode],
+                ),
+                UPLOAD_ERR_FORM_SIZE => new InvalidTicketException(
+                    'El archivo supera el tamaño máximo permitido.',
+                    'upload_err_form_size',
+                    ['upload_error_code' => $errorCode],
+                ),
+                UPLOAD_ERR_PARTIAL => new InvalidTicketException(
+                    'No se pudo subir el archivo.',
+                    'upload_err_partial',
                     ['upload_error_code' => $errorCode],
                 ),
                 UPLOAD_ERR_NO_FILE => new InvalidTicketException(
@@ -157,7 +167,7 @@ class TicketService
                 ),
                 default => new InvalidTicketException(
                     'No se pudo subir el archivo.',
-                    'not_uploaded_file',
+                    'upload_err_other',
                     ['upload_error_code' => $errorCode],
                 ),
             };

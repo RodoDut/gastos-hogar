@@ -28,18 +28,23 @@ use GastosHogar\User\UserService;
 use GastosHogar\View\View;
 
 // ── Bootstrap ────────────────────────────────────────────────────
-// Limitación aceptada: un fallo antes de crear $logger (p. ej. .env ausente) no queda registrado.
+// Limitación aceptada: solo un fallo en vendor/autoload.php (antes de este
+// bloque) queda sin registrar. $logger se crea antes de validar el .env
+// para que una .env ausente o incompleta quede como "critical" en el log
+// en vez de ser un error invisible (display_errors sigue en 0).
 $dotenv = Dotenv::createImmutable($root);
-$dotenv->load();
-$dotenv->required(['APP_PASS', 'DATA_FILE', 'SESSION_TTL', 'MAX_ATTEMPTS', 'LOCKOUT_SEC']);
+$dotenv->safeLoad();
 
-$config         = new Config();
-$logger         = new FileLogger(
+$logger = new FileLogger(
     $root . '/data/logs/app.log',
-    $config->logLevel,
+    $_ENV['LOG_LEVEL'] ?? 'warning',
     ['request_id' => bin2hex(random_bytes(6))],
 );
 (new ErrorHandlerRegistrar($logger))->register();
+
+$dotenv->required(['APP_PASS', 'DATA_FILE', 'SESSION_TTL', 'MAX_ATTEMPTS', 'LOCKOUT_SEC']);
+
+$config         = new Config();
 $expRepo        = new JsonExpenseRepository($root . '/' . $config->dataFile);
 $personRepo     = new JsonPersonRepository($root . '/data/people.json');
 $userRepo       = new JsonUserRepository($root . '/data/people.json');
@@ -118,7 +123,28 @@ if ($page === 'share_ticket') {
         exit;
     }
 
+    $requestMeta = [
+        'method'               => $_SERVER['REQUEST_METHOD'] ?? null,
+        'content_type'         => $_SERVER['CONTENT_TYPE'] ?? null,
+        'content_length'       => $_SERVER['CONTENT_LENGTH'] ?? null,
+        'files_keys'           => array_keys($_FILES),
+        'post_count'           => count($_POST),
+        'post_max_size'        => ini_get('post_max_size'),
+        'upload_max_filesize'  => ini_get('upload_max_filesize'),
+        'upload_tmp_dir'       => ini_get('upload_tmp_dir'),
+        'file_uploads'         => ini_get('file_uploads'),
+        'user_agent'           => $_SERVER['HTTP_USER_AGENT'] ?? null,
+        // Nombradas sin la palabra "cookie" a propósito: JsonLineFormatter
+        // redacta por substring cualquier clave que la contenga, y acá el
+        // valor es un bool de presencia, no la cookie en sí.
+        'php_session_present'  => isset($_COOKIE[session_name()]),
+        // 'remember_me' replica RememberMeService::COOKIE_NAME (privada; esa
+        // clase no se toca en este cambio, así que no se referencia desde acá).
+        'remember_me_present'  => isset($_COOKIE['remember_me']),
+    ];
+
     if (!$auth->isLoggedIn()) {
+        $logger->warning('share_ticket sin sesión', $requestMeta);
         http_response_code(200);
         echo '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">'
             . '<title>GastosHogar</title></head><body>'
@@ -129,17 +155,6 @@ if ($page === 'share_ticket') {
     }
 
     $ticketService->cleanPending();
-
-    $requestMeta = [
-        'method'              => $_SERVER['REQUEST_METHOD'] ?? null,
-        'content_type'        => $_SERVER['CONTENT_TYPE'] ?? null,
-        'content_length'      => $_SERVER['CONTENT_LENGTH'] ?? null,
-        'files_keys'          => array_keys($_FILES),
-        'post_count'          => count($_POST),
-        'post_max_size'       => ini_get('post_max_size'),
-        'upload_max_filesize' => ini_get('upload_max_filesize'),
-        'upload_tmp_dir'      => ini_get('upload_tmp_dir'),
-    ];
     $logger->debug('share_ticket upload recibido', $requestMeta);
 
     try {
