@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 ini_set('display_errors', '0');
-error_reporting(0);
+error_reporting(E_ALL);
 
 $root = dirname(__DIR__);
 require_once $root . '/vendor/autoload.php';
@@ -19,6 +19,8 @@ use GastosHogar\Expense\Expense;
 use GastosHogar\Expense\InvalidTicketException;
 use GastosHogar\Expense\JsonExpenseRepository;
 use GastosHogar\Expense\TicketService;
+use GastosHogar\Logging\ErrorHandlerRegistrar;
+use GastosHogar\Logging\FileLogger;
 use GastosHogar\Person\Person;
 use GastosHogar\Person\JsonPersonRepository;
 use GastosHogar\User\JsonUserRepository;
@@ -26,11 +28,18 @@ use GastosHogar\User\UserService;
 use GastosHogar\View\View;
 
 // ── Bootstrap ────────────────────────────────────────────────────
+// Limitación aceptada: un fallo antes de crear $logger (p. ej. .env ausente) no queda registrado.
 $dotenv = Dotenv::createImmutable($root);
 $dotenv->load();
 $dotenv->required(['APP_PASS', 'DATA_FILE', 'SESSION_TTL', 'MAX_ATTEMPTS', 'LOCKOUT_SEC']);
 
 $config         = new Config();
+$logger         = new FileLogger(
+    $root . '/data/logs/app.log',
+    $config->logLevel,
+    ['request_id' => bin2hex(random_bytes(6))],
+);
+(new ErrorHandlerRegistrar($logger))->register();
 $expRepo        = new JsonExpenseRepository($root . '/' . $config->dataFile);
 $personRepo     = new JsonPersonRepository($root . '/data/people.json');
 $userRepo       = new JsonUserRepository($root . '/data/people.json');
@@ -121,19 +130,34 @@ if ($page === 'share_ticket') {
 
     $ticketService->cleanPending();
 
-    error_log('[share_ticket] ' . json_encode([
-    'files' => $_FILES,
-    'len'   => $_SERVER['CONTENT_LENGTH'] ?? null,
-    'ctype' => $_SERVER['CONTENT_TYPE'] ?? null,
-        ]));
+    $requestMeta = [
+        'method'              => $_SERVER['REQUEST_METHOD'] ?? null,
+        'content_type'        => $_SERVER['CONTENT_TYPE'] ?? null,
+        'content_length'      => $_SERVER['CONTENT_LENGTH'] ?? null,
+        'files_keys'          => array_keys($_FILES),
+        'post_count'          => count($_POST),
+        'post_max_size'       => ini_get('post_max_size'),
+        'upload_max_filesize' => ini_get('upload_max_filesize'),
+        'upload_tmp_dir'      => ini_get('upload_tmp_dir'),
+    ];
+    $logger->debug('share_ticket upload recibido', $requestMeta);
 
     try {
         $pendingFilename = $ticketService->storePending($_FILES['ticket_shared'] ?? []);
     } catch (InvalidTicketException $e) {
+        $logger->warning('share_ticket rechazado', $requestMeta + [
+            'reason'  => $e->reason(),
+            'details' => $e->details(),
+        ]);
         $_SESSION['app_error'] = $e->getMessage();
         header('Location: ?page=app');
         exit;
     }
+
+    $logger->info('share_ticket guardado', [
+        'extension' => pathinfo($pendingFilename, PATHINFO_EXTENSION),
+        'size'      => $_FILES['ticket_shared']['size'] ?? null,
+    ]);
 
     header('Location: ?page=app&pending_ticket=' . urlencode($pendingFilename));
     exit;
@@ -369,6 +393,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         http_response_code(403);
         die(e($e->getMessage()));
     } catch (InvalidTicketException $e) {
+        $logger->warning('ticket rechazado', [
+            'action'  => $action,
+            'reason'  => $e->reason(),
+            'details' => $e->details(),
+            'user_id' => $actor->id,
+        ]);
         $_SESSION['app_error'] = $e->getMessage();
     }
 
